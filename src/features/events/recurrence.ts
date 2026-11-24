@@ -65,7 +65,7 @@ export function validOccurrenceDate(event: PlannerEvent, date: string) {
 }
 
 export function occurrenceFields(event: PlannerEvent, date: string): EventFields {
-  const { title, categoryId, location, link, description, links, attachments, status, busy, timing } = event;
+  const { title, categoryId, location, link, description, links, attachments, status, busy, timing, kind, lessonId, travelBefore, travelAfter } = event;
   let shifted = timing;
   if (date !== seriesDate(timing)) {
     if (timing.allDay) {
@@ -85,7 +85,7 @@ export function occurrenceFields(event: PlannerEvent, date: string): EventFields
       };
     }
   }
-  return { title, categoryId, location, link, description, links, attachments, status, busy, timing: shifted };
+  return { title, categoryId, location, link, description, links, attachments, status, busy, kind, lessonId, travelBefore, travelAfter, timing: shifted };
 }
 
 export function overlaps(a: Interval, b: Interval) {
@@ -124,12 +124,12 @@ export function expandEvents(events: PlannerEvent[], start: string, end: string,
   return results.sort((a, b) => timingInterval(a.timing, zone).start - timingInterval(b.timing, zone).start);
 }
 
-export function nextOccurrence(events: PlannerEvent[], now: number, viewZone: string) {
+export function nextOccurrence(events: PlannerEvent[], now: number, viewZone: string, matches: (fields: EventFields) => boolean = () => true) {
   let next: Occurrence | undefined;
   let soonest = Infinity;
   for (const event of events) {
     function consider(date: string, fields: EventFields) {
-      if (fields.status !== "planned") return false;
+      if (fields.status !== "planned" || !matches(fields)) return false;
       const start = timingInterval(fields.timing, viewZone).start;
       if (start <= now) return false;
       if (start < soonest) {
@@ -142,7 +142,7 @@ export function nextOccurrence(events: PlannerEvent[], now: number, viewZone: st
     for (const [date, fields] of Object.entries(event.exceptions)) {
       if (fields) consider(date, fields);
     }
-    if (event.status !== "planned") continue;
+    if (event.status !== "planned" || !matches(event)) continue;
     const zone = event.timing.allDay ? viewZone : event.timing.zone;
     const from = todayIn(now, zone);
     // A future override may have moved earlier than the next generated date.

@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, Check, Clock3, Copy, Download, ExternalLink, FileText, Link2, MapPin, Pencil, Repeat2, Trash2, X } from "lucide-react";
+import { CalendarDays, Check, Clock3, Copy, Download, ExternalLink, FileText, Link2, MapPin, Pencil, Repeat2, Route, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui";
-import { addDays, epoch, eventTime, fullDay, todayIn } from "@/features/calendar/dates";
-import { statusLabels } from "@/lib/defaults";
+import { addDays, duration, epoch, eventTime, fullDay, todayIn } from "@/features/calendar/dates";
+import { eventKinds, statusLabels } from "@/lib/defaults";
 import type { Occurrence, PlannerData, PlannerEvent, Status } from "@/types/planner";
 import { downloadAttachment } from "@/features/settings/settings";
 
@@ -16,6 +16,7 @@ export function EventDetail({ event, series, data, stale, copy, act }: {
   const [choice, setChoice] = useState<Action | null>(null);
   const { calendar, zone } = data.settings;
   const category = data.categories.find((value) => value.id === event.categoryId);
+  const lesson = data.lessons.find((value) => value.id === event.lessonId);
   const start = event.timing.allDay ? event.timing.start : todayIn(epoch(event.timing.start), zone);
   const end = event.timing.allDay ? addDays(event.timing.end, -1) : todayIn(epoch(event.timing.end), zone);
   const verbs = { edit: "ویرایش", delete: "حذف", cancelled: "لغو", done: "انجام‌شده", planned: "فعال‌سازی دوباره" };
@@ -25,11 +26,16 @@ export function EventDetail({ event, series, data, stale, copy, act }: {
     <div className="detail-tags">
       <span className="state-tag"><span className="color-dot" style={{ backgroundColor: category?.color }} />{category?.name}</span>
       <span className="state-tag">{statusLabels[event.status]}</span>
+      {event.kind !== "general" && <span className="state-tag">{eventKinds[event.kind]}</span>}
+      {lesson && <span className="state-tag">{lesson.name}</span>}
       {series?.recurrence && <span className="state-tag"><Repeat2 size={16} /> تکرارشونده</span>}
     </div>
     <ul className="details">
       <li><CalendarDays size={17} /> {fullDay(start, calendar)}{end !== start && ` تا ${fullDay(end, calendar)}`}</li>
       <li><Clock3 size={17} /> {eventTime(event.timing, zone)} · {event.busy && event.status !== "cancelled" ? "زمان را اشغال می‌کند" : "زمان را اشغال نمی‌کند"}</li>
+      {(event.travelBefore > 0 || event.travelAfter > 0) && <li><Route size={17} /> رفت‌وآمد
+        {[event.travelBefore ? `${duration(event.travelBefore)} قبل` : "", event.travelAfter ? `${duration(event.travelAfter)} بعد` : ""].filter(Boolean).join(" · ")}
+      </li>}
       {event.location && <li><MapPin size={17} />{event.location}</li>}
       {event.link && <li><Link2 size={17} /><a href={event.link} target="_blank" rel="noreferrer">باز کردن لینک جلسه <ExternalLink size={14} /></a></li>}
       {event.links.map((link, index) => <li key={index}><Link2 size={17} /><a href={link.url} target="_blank" rel="noreferrer">{link.label} <ExternalLink size={14} /></a></li>)}

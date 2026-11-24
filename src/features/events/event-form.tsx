@@ -7,8 +7,9 @@ import { addDays, atTime, clockLabel, epoch, eventTime, fullDay, instantISO, lat
 import { conflicts } from "@/features/availability/availability";
 import { eventFieldsSchema } from "@/features/backup/schema";
 import { expandEvents, seriesDate, validOccurrenceDate } from "./recurrence";
-import { statusLabels } from "@/lib/defaults";
-import type { Attachment, EventFields, Interval, PlannerData, PlannerEvent, Recurrence, Timing } from "@/types/planner";
+import { LessonSelect } from "@/features/lessons/lesson-select";
+import { eventKinds, kindForCategory, statusLabels } from "@/lib/defaults";
+import type { Attachment, EventFields, EventKind, Interval, PlannerData, PlannerEvent, Recurrence, Timing } from "@/types/planner";
 
 export interface EventDraft {
   date: string;
@@ -18,6 +19,8 @@ export interface EventDraft {
   series?: PlannerEvent;
   occurrence?: string;
   taskId?: string;
+  lessonId?: string;
+  kind?: EventKind;
 }
 
 export function EventForm({ data, draft, cancel, stale, save }: {
@@ -30,12 +33,15 @@ export function EventForm({ data, draft, cancel, stale, save }: {
   const initial = fields?.timing;
   const rule = draft.occurrence ? null : draft.series?.recurrence;
   const linkedTask = data.tasks.find((task) => task.id === draft.taskId || task.eventId === draft.series?.id);
+  const category = fields?.categoryId ?? draft.categoryId ?? linkedTask?.categoryId ?? data.categories[0].id;
+  const [kind, setKind] = useState<EventKind>(fields?.kind ?? draft.kind ?? (linkedTask ? "general" : kindForCategory(category)));
+  const [kindTouched, setKindTouched] = useState(Boolean(fields || draft.kind || linkedTask));
   const startDate = initial ? seriesDate(initial) : draft.slot ? todayIn(draft.slot.start, editZone) : draft.date;
   const endDate = initial?.allDay ? addDays(initial.end, -1)
     : initial ? todayIn(epoch(initial.end), editZone) : draft.slot ? todayIn(draft.slot.end, editZone) : startDate;
   const startTime = initial && !initial.allDay ? localTime(epoch(initial.start), editZone) : draft.slot ? localTime(draft.slot.start, editZone) : "09:00";
   const endTime = initial && !initial.allDay ? localTime(epoch(initial.end), editZone) : draft.slot ? localTime(draft.slot.end, editZone) : "10:00";
-  const [allDay, setAllDay] = useState(initial?.allDay ?? false);
+  const [allDay, setAllDay] = useState(initial?.allDay ?? draft.kind === "exam");
   const [frequency, setFrequency] = useState(rule?.frequency ?? "");
   const [endType, setEndType] = useState(rule?.end.type ?? "never");
   const [links, setLinks] = useState(fields?.links ?? []);
@@ -95,8 +101,13 @@ export function EventForm({ data, draft, cancel, stale, save }: {
         return { name: file.name, base64 };
       }));
       if (!active.current) return;
+      const travelBefore = Number(latin(get("travelBefore")));
+      const travelAfter = Number(latin(get("travelAfter")));
+      if ([travelBefore, travelAfter].some((value) => !Number.isInteger(value) || value < 0 || value > 720)) {
+        throw new Error("زمان رفت‌وآمد باید بین صفر و ۷۲۰ دقیقه باشد.");
+      }
       const checked = eventFieldsSchema.safeParse({
-        title: get("title"), categoryId: get("category"), timing, location: get("location"), link: get("link"),
+        title: get("title"), categoryId: get("category"), lessonId: get("lesson") || null, kind, travelBefore, travelAfter, timing, location: get("location"), link: get("link"),
         description: get("description"), links, attachments: [...attachments, ...readFiles], status: get("status"), busy: form.has("busy"),
       });
       if (!checked.success) throw new Error("عنوان و مقادیر رویداد را بررسی کنید. لینک جلسه باید با http یا https شروع شود.");
@@ -128,19 +139,19 @@ export function EventForm({ data, draft, cancel, stale, save }: {
       edited.exceptions = Object.fromEntries(Object.entries(edited.exceptions).filter(([date]) => !removed.includes(date)));
       const messages: string[] = removed.length ? ["با تغییر قانون سری، بعضی استثناهای قبلی دیگر نوبت معتبری ندارند و حذف می‌شوند."] : [];
 
-      if (values.busy && values.status !== "cancelled") {
+      if ((values.busy || values.travelBefore || values.travelAfter) && values.status !== "cancelled") {
         const interval = timingInterval(values.timing, zone);
         const from = todayIn(interval.start, zone);
         const horizon = edited.recurrence && !draft.occurrence ? 366 : 1;
         const to = addDays(todayIn(interval.end - 1, zone), horizon);
-        const others = expandEvents(data.events.filter((entry) => !draft.series || draft.occurrence || entry.id !== draft.series.id), from, to, zone);
+        const others = expandEvents(data.events.filter((entry) => !draft.series || draft.occurrence || entry.id !== draft.series.id), addDays(from, -1), addDays(to, 1), zone);
         const candidates = edited.recurrence && !draft.occurrence
           ? expandEvents([edited], from, to, zone)
           : [{ ...values, eventId: edited.id, date: start }];
         const warningEntries = new Set<string>();
         for (const candidate of candidates) {
           const sharedEvents = conflicts(candidate, edited.recurrence && !draft.occurrence ? [...others, ...candidates] : others, zone,
-            { eventId: edited.id, date: draft.occurrence ?? candidate.date });
+            { eventId: edited.id, date: draft.occurrence ?? candidate.date }, true);
           for (const { event, shared } of sharedEvents) {
             const displayRange = `${clockLabel(shared.start, zone)} تا ${clockLabel(shared.end, zone)}`;
             const dayLabel = fullDay(todayIn(shared.start, zone), calendar);
@@ -170,12 +181,19 @@ export function EventForm({ data, draft, cancel, stale, save }: {
     {stale && <p className="error" role="alert">داده‌ها در تب دیگری تغییر کرده‌اند. فرم را ببندید و دوباره باز کنید.</p>}
     <Field label="عنوان"><input name="title" required maxLength={160} autoFocus defaultValue={fields?.title ?? linkedTask?.title ?? ""} placeholder="مثلاً کلاس مبانی طراحی" /></Field>
     <div className="form-grid">
-      <Field label="دسته‌بندی"><select name="category" defaultValue={fields?.categoryId ?? draft.categoryId ?? data.categories[0].id}>
+      <Field label="دسته‌بندی"><select name="category" defaultValue={category}
+        onChange={(event) => { if (!kindTouched) setKind(kindForCategory(event.target.value)); }}>
         {data.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
       </select></Field>
       <Field label="وضعیت"><select name="status" defaultValue={fields?.status ?? "planned"}>
         {Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
       </select></Field>
+    </div>
+    <div className="form-grid">
+      <Field label="نوع رویداد"><select value={kind} onChange={(event) => { setKindTouched(true); setKind(event.target.value as EventKind); }}>
+        {Object.entries(eventKinds).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+      </select></Field>
+      {data.lessons.length > 0 && <LessonSelect lessons={data.lessons} value={fields ? fields.lessonId : draft.lessonId ?? linkedTask?.lessonId} />}
     </div>
     <div className="check-row"><Check checked={allDay} onChange={(event) => setAllDay(event.target.checked)}>تمام‌روز</Check><Check name="busy" defaultChecked={fields?.busy ?? true}>زمان را اشغال می‌کند</Check></div>
     <div className="form-grid">
@@ -205,6 +223,13 @@ export function EventForm({ data, draft, cancel, stale, save }: {
       <Field label="مکان"><input name="location" maxLength={300} defaultValue={fields?.location} placeholder="اختیاری" /></Field>
       <Field label="لینک جلسه"><input name="link" type="url" dir="ltr" maxLength={1500} defaultValue={fields?.link} placeholder="https://" /></Field>
     </div>
+    <fieldset className="form"><legend>رفت‌وآمد</legend>
+      <div className="form-grid">
+        <Field label="رفت‌وآمد قبل (دقیقه)"><input name="travelBefore" inputMode="numeric" defaultValue={fields?.travelBefore || ""} placeholder="۰" /></Field>
+        <Field label="رفت‌وآمد بعد (دقیقه)"><input name="travelAfter" inputMode="numeric" defaultValue={fields?.travelAfter || ""} placeholder="۰" /></Field>
+      </div>
+      <small className="muted">این زمان در پیشنهادها اشغال است و جدا از مدت رویداد حساب می‌شود.</small>
+    </fieldset>
     <Field label="توضیحات"><textarea name="description" rows={2} maxLength={3000} defaultValue={fields?.description} placeholder="اختیاری" /></Field>
     <fieldset className="form"><legend><Paperclip size={16} /> لینک‌ها و پیوست‌ها</legend>
       {links.map((link, index) => <div key={index} className="link-inputs">

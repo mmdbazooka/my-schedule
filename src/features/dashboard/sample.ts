@@ -1,4 +1,5 @@
 import { addDays, atTime, instantISO } from "@/features/calendar/dates";
+import { kindForCategory } from "@/lib/defaults";
 import type { PlannerData, PlannerEvent } from "@/types/planner";
 
 export function sampleData(data: PlannerData, today: string): PlannerData {
@@ -12,9 +13,9 @@ export function sampleData(data: PlannerData, today: string): PlannerData {
   ];
   const events: PlannerEvent[] = entries.map(([title, category, start, end, date]) => ({
     id: crypto.randomUUID(), title, categoryId: data.categories.some((item) => item.id === category) ? category : data.categories[0].id,
-    status: "planned", busy: true, location: "", link: "", description: "رویداد ساختگی برای امتحان برنامه.",
+    kind: kindForCategory(category), lessonId: null, travelBefore: 0, travelAfter: 0, status: "planned", busy: true, location: "", link: "", description: "رویداد ساختگی برای امتحان برنامه.",
     links: [], attachments: [], recurrence: null, exceptions: {},
     timing: { allDay: false, zone, start: instantISO(atTime(date, start, zone)), end: instantISO(atTime(date, end, zone)) },
   }));
-  return { ...data, events, tasks: [{ id: crypto.randomUUID(), title: "آماده‌کردن نمونه‌کار", minutes: 90, priority: "medium", due: addDays(today, 4), eventId: null }] };
+  return { ...data, events, tasks: [{ id: crypto.randomUUID(), title: "آماده‌کردن نمونه‌کار", minutes: 90, priority: "medium", due: addDays(today, 4), eventId: null, lessonId: null, categoryId: "study", done: false }] };
 }

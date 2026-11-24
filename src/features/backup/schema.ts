@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { addDays, day, epoch, weekday } from "@/features/calendar/dates";
 import { seriesDate, validOccurrenceDate } from "@/features/events/recurrence";
+import { kindForCategory } from "@/lib/defaults";
 import type { PlannerData } from "@/types/planner";
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/);
@@ -28,8 +29,12 @@ const timing = z.discriminatedUnion("allDay", [
 ]).refine((value) => {
   try { return value.allDay ? value.end > value.start : epoch(value.end) > epoch(value.start); } catch { return false; }
 });
+const weeklyMinutes = z.number().int().min(0).max(10080);
+const travel = z.number().int().min(0).max(720);
+const hours = z.object({ start: clock, end: clock.or(z.literal("24:00")) }).refine((range) => range.start < range.end);
 export const eventFieldsSchema = z.object({
-  title, categoryId: id, timing, location: z.string().max(300), link: safeLink,
+  title, categoryId: id, timing, kind: z.enum(["general", "class", "exam", "study"]), lessonId: id.nullable(),
+  travelBefore: travel, travelAfter: travel, location: z.string().max(300), link: safeLink,
   links: z.array(z.object({ label: z.string().trim().min(1).max(100), url: safeLink.refine(Boolean) })).max(10).default([]),
   attachments: z.array(z.object({
     name: z.string().min(5).max(180).regex(/\.pdf$/i),
@@ -53,17 +58,18 @@ const recurrence = z.object({
 const event = eventFieldsSchema.extend({ id, recurrence: recurrence.nullable(), exceptions: z.record(date, eventFieldsSchema.nullable()) });
 const task = z.object({
   id, title, minutes: z.number().int().min(1).max(1440), priority: z.enum(["low", "medium", "high"]),
-  due: date.nullable(), eventId: id.nullable(),
+  due: date.nullable(), eventId: id.nullable(), lessonId: id.nullable(), categoryId: id.nullable(), done: z.boolean(),
 });
 export const settingsSchema = z.object({
   calendar, zone, weekStart: weekdayNumber, theme: z.enum(["light", "dark", "system"]),
   minimum: z.number().int().min(1).max(720), buffer: z.number().int().min(0).max(180),
-  active: z.array(z.array(z.object({ start: clock, end: clock.or(z.literal("24:00")) }))
-    .max(24).refine((ranges) => ranges.every((range) => range.start < range.end))).length(7),
+  active: z.array(z.array(hours).max(24)).length(7),
 });
 
 const dataSchema = z.object({
-  categories: z.array(z.object({ id, name: title.max(40), color })).min(1).max(200),
+  categories: z.array(z.object({ id, name: title.max(40), color, weeklyMinutes })).min(1).max(200),
+  lessons: z.array(z.object({ id, name: title.max(80), weeklyMinutes })).max(500),
+  preferences: z.array(hours.safeExtend({ id, categoryId: id, weekday: weekdayNumber })).max(500),
   events: z.array(event).max(10000),
   tasks: z.array(task).max(10000),
   settings: settingsSchema,
@@ -71,20 +77,30 @@ const dataSchema = z.object({
 const envelope = z.object({ version: z.number().int(), exportedAt: z.iso.datetime({ offset: true }), data: z.unknown() });
 const unique = (values: string[]) => new Set(values).size === values.length;
 
-export const version = 2;
+export const version = 3;
 
 export function validateData(input: unknown): PlannerData {
   const parsed = dataSchema.safeParse(input);
   if (!parsed.success) throw new Error("ساختار داده یا یکی از مقادیر تاریخ، زمان یا تنظیمات معتبر نیست.");
   const data = parsed.data;
   const categoryIds = new Set(data.categories.map((entry) => entry.id));
+  const lessonIds = new Set(data.lessons.map((entry) => entry.id));
   const eventsById = new Map(data.events.map((entry) => [entry.id, entry]));
   if (categoryIds.size !== data.categories.length || eventsById.size !== data.events.length ||
+    lessonIds.size !== data.lessons.length || !unique(data.preferences.map((entry) => entry.id)) ||
     !unique(data.tasks.map((entry) => entry.id))) throw new Error("فایل دارای شناسهٔ تکراری است.");
+  const lessonExists = (value: string | null) => value === null || lessonIds.has(value);
+  if (data.preferences.some((entry) => !categoryIds.has(entry.categoryId)) ||
+    data.tasks.some((entry) => !lessonExists(entry.lessonId) || (entry.categoryId !== null && !categoryIds.has(entry.categoryId)))) {
+    throw new Error("ارجاع دسته یا درس در تنظیمات و کارها معتبر نیست.");
+  }
   for (const entry of data.events) {
     const dates = Object.keys(entry.exceptions);
     if (!categoryIds.has(entry.categoryId) || Object.values(entry.exceptions).some((value) => value && !categoryIds.has(value.categoryId))) {
       throw new Error("یکی از رویدادها به دسته‌ای ناموجود ارجاع دارد.");
+    }
+    if (!lessonExists(entry.lessonId) || Object.values(entry.exceptions).some((value) => value && !lessonExists(value.lessonId))) {
+      throw new Error("یکی از رویدادها به درس ناموجود ارجاع دارد.");
     }
     if (!entry.recurrence && dates.length) throw new Error("استثنا بدون سری تکرار معتبر نیست.");
     if (entry.recurrence) {
@@ -103,6 +119,9 @@ export function validateData(input: unknown): PlannerData {
     const entry = eventsById.get(key);
     return !entry || entry.recurrence || entry.status === "cancelled";
   })) throw new Error("زمان‌بندی یکی از کارها به رویداد معتبری ارجاع ندارد.");
+  if (data.tasks.some((task) => task.eventId && task.done !== (eventsById.get(task.eventId)?.status === "done"))) {
+    throw new Error("وضعیت کار با رویداد زمان‌بندی‌شدهٔ آن سازگار نیست.");
+  }
   return data;
 }
 
@@ -126,6 +145,30 @@ function migrateV1(input: unknown) {
   };
 }
 
+// Version 2 stored no lessons, goals, travel, or preferred times.
+function migrateV2(input: unknown) {
+  const record = z.record(z.string(), z.unknown());
+  const previous = z.object({ categories: z.array(record), events: z.array(record), tasks: z.array(record), settings: z.unknown() }).parse(input);
+  const linkedEvents = new Set(previous.tasks.map((entry) => entry.eventId));
+  const fields = (entry: Record<string, unknown>, linked = false) => ({
+    ...entry, kind: linked && entry.categoryId === "university" ? "general" : kindForCategory(typeof entry.categoryId === "string" ? entry.categoryId : null),
+    lessonId: null, travelBefore: 0, travelAfter: 0,
+  });
+  const events = previous.events.map((entry) => ({
+    ...fields(entry, linkedEvents.has(entry.id)),
+    exceptions: Object.fromEntries(Object.entries(z.record(z.string(), record.nullable()).parse(entry.exceptions))
+      .map(([key, value]) => [key, value && fields(value)])),
+  }));
+  const eventsById = new Map(previous.events.map((entry) => [entry.id, entry]));
+  return {
+    ...previous, events, lessons: [], preferences: [],
+    categories: previous.categories.map((entry) => ({ ...entry, weeklyMinutes: 0 })),
+    tasks: previous.tasks.map((entry) => ({
+      ...entry, lessonId: null, categoryId: null, done: eventsById.get(entry.eventId)?.status === "done",
+    })),
+  };
+}
+
 export function encodeBackup(data: PlannerData, exportedAt = new Date().toISOString()) {
   return JSON.stringify({ version, exportedAt, data }, null, 2);
 }
@@ -137,10 +180,13 @@ export function decodeBackup(raw: string) {
   if (!parsed.success) throw new Error("سربرگ یا تاریخ فایل پشتیبان معتبر نیست.");
   const file = parsed.data;
   if (file.version > version) throw new Error("نسخهٔ بکاپ جدیدتر از نسخهٔ برنامه است.");
-  if (file.version !== 1 && file.version !== version) throw new Error("این نسخهٔ بکاپ پشتیبانی نمی‌شود.");
+  if (file.version !== 1 && file.version !== 2 && file.version !== version) throw new Error("این نسخهٔ بکاپ پشتیبانی نمی‌شود.");
   let data = file.data;
   if (file.version === 1) {
     try { data = migrateV1(data); } catch { throw new Error("تبدیل ساختار بکاپ نسخهٔ ۱ ممکن نبود."); }
+  }
+  if (file.version === 1 || file.version === 2) {
+    try { data = migrateV2(data); } catch { throw new Error("تبدیل ساختار بکاپ قدیمی ممکن نبود."); }
   }
   return { exportedAt: file.exportedAt, data: validateData(data) };
 }

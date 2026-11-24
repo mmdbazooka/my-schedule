@@ -2,9 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { availableSlots, conflicts, dailyAvailability, suggestions } from "../src/features/availability/availability";
 import { decodeBackup, encodeBackup, validateData } from "../src/features/backup/schema";
-import { addDays, atTime, calendarDate, dateInput, instantISO, localTime, minute, parseDateInput, weekday } from "../src/features/calendar/dates";
+import { addDays, atTime, calendarDate, dateInput, instantISO, localTime, minute, parseDateInput, weekday, weekBeginning } from "../src/features/calendar/dates";
 import { occurrencesOn, timelineLayout } from "../src/features/calendar/layout";
 import { expandEvents, nextOccurrence, occurrenceFields, seriesDate } from "../src/features/events/recurrence";
+import { copyOccurrence, weekCopySources } from "../src/features/calendar/week-copy";
+import { weeklyGoals } from "../src/features/goals/weekly";
+import { lessonOverview } from "../src/features/lessons/overview";
+import { moveOverdue, overdueItems } from "../src/features/tasks/overdue";
 import { defaults } from "../src/lib/defaults";
 import type { PlannerEvent, Timing } from "../src/types/planner";
 
@@ -13,7 +17,7 @@ const date = "2026-11-25";
 function timed(id: string, start: string, end: string, dateStart = date, dateEnd = date, timeZone = zone): PlannerEvent {
   return {
     id, title: id, categoryId: "university", location: "", link: "", links: [], attachments: [], description: "",
-    status: "planned", busy: true, timing: {
+    kind: "general", lessonId: null, travelBefore: 0, travelAfter: 0, status: "planned", busy: true, timing: {
       allDay: false, zone: timeZone, start: instantISO(atTime(dateStart, start, timeZone)), end: instantISO(atTime(dateEnd, end, timeZone)),
     }, recurrence: null, exceptions: {},
   };
@@ -115,9 +119,9 @@ test("task slots fit duration and deadline and cancelled or non-blocking all-day
   const allDay = { ...timed("occasion", "09:00", "10:00"), busy: false,
     timing: { allDay: true, start: date, end: addDays(date, 1) } } satisfies PlannerEvent;
   data.events = [allDay, { ...timed("cancelled", "11:00", "13:00"), status: "cancelled" }];
-  const task = { id: "task", title: "تمرین", minutes: 90, priority: "high", due: date, eventId: null } as const;
+  const task = { id: "task", title: "تمرین", minutes: 90, priority: "high", due: date, eventId: null, categoryId: null, done: false, lessonId: null } as const;
   const now = atTime(date, "08:00", zone);
-  assert.deepEqual(suggestions(data, task, now), [{ start: atTime(date, "11:00", zone), end: atTime(date, "11:00", zone) + 90 * minute }]);
+  assert.deepEqual(suggestions(data, task, now), [{ start: atTime(date, "11:00", zone), end: atTime(date, "11:00", zone) + 90 * minute, preferred: false }]);
   data.events[0].busy = true;
   assert.deepEqual(availableSlots(data, date, addDays(date, 1), now, task), []);
 });
@@ -134,7 +138,7 @@ test("backup validates versions, duplicate IDs, references, timing, safe links a
   assert.throws(() => decodeBackup(JSON.stringify({ ...output, version: 20 })), /جدیدتر/);
   assert.throws(() => validateData({ ...data, events: [entry, entry] }), /شناسه/);
   assert.throws(() => validateData({ ...data, events: [{ ...entry, categoryId: "missing" }] }), /دسته/);
-  assert.throws(() => validateData({ ...data, tasks: [{ id: "task", title: "کار", minutes: 40, priority: "low", due: null, eventId: "missing" }] }), /ارجاع/);
+  assert.throws(() => validateData({ ...data, tasks: [{ id: "task", title: "کار", minutes: 40, priority: "low", due: null, eventId: "missing", categoryId: null, done: false, lessonId: null }] }), /ارجاع/);
   assert.throws(() => validateData({ ...data, events: [{ ...entry, timing: { allDay: true, start: date, end: date } }] }));
   assert.throws(() => validateData({ ...data, events: [{ ...entry, links: [{ label: "بد", url: "javascript:alert(1)" }] }] }));
   assert.throws(() => validateData({ ...data, events: [{ ...entry, attachments: [{ name: "guide.pdf", base64: "aGVsbG8=" }] }] }));
@@ -173,4 +177,79 @@ test("suggestions after an imported event do not round into the occupied minute"
   data.events = [event];
   const now = atTime(date, "08:00", zone);
   assert.equal(availableSlots(data, date, addDays(date, 1), now)[0].start, atTime(date, "09:01", zone));
+});
+
+test("preferred slots rank first and travel plus buffer block time after class", () => {
+  const data = defaults();
+  data.settings.buffer = 15;
+  data.events = [{ ...timed("class", "14:00", "15:00"), kind: "class", travelAfter: 30 }];
+  data.preferences = [{ id: "deep", categoryId: "study", weekday: weekday(date), start: "15:00", end: "18:00" }];
+  const request = { minutes: 60, due: date, categoryId: "study" };
+  const options = suggestions(data, request, atTime(date, "12:30", zone), { limit: 3 });
+  assert.deepEqual(options[0], { start: atTime(date, "15:45", zone), end: atTime(date, "16:45", zone), preferred: true });
+  assert.equal(options[1].preferred, false);
+  data.events[0].status = "cancelled";
+  assert.equal(suggestions(data, request, atTime(date, "13:00", zone))[0].start, atTime(date, "15:00", zone));
+});
+
+test("weekly progress clips boundary events and counts done separately from planned", () => {
+  const data = defaults();
+  data.lessons = [{ id: "logic", name: "منطق", weeklyMinutes: 240 }];
+  const start = weekBeginning(date, data.settings.weekStart);
+  const before = addDays(start, -1);
+  data.events = [
+    { ...timed("overnight", "23:00", "01:00", before, start), kind: "study", lessonId: "logic" },
+    { ...timed("done", "09:00", "10:00"), kind: "study", lessonId: "logic", status: "done" },
+    { ...timed("cancelled", "11:00", "12:00"), kind: "study", lessonId: "logic", status: "cancelled" },
+    { ...timed("class", "12:00", "13:00"), kind: "class", lessonId: "logic" },
+  ];
+  const goal = weeklyGoals(data, atTime(date, "08:00", zone)).rows[0];
+  assert.deepEqual([goal.planned, goal.done, goal.remaining], [60, 60, 120]);
+});
+
+test("lesson countdown and study total stop at the exam hour and ignore cancelled sessions", () => {
+  const data = defaults();
+  const tomorrow = addDays(date, 1);
+  data.lessons = [{ id: "logic", name: "منطق", weeklyMinutes: 0 }];
+  data.events = [
+    { ...timed("exam", "11:00", "12:00", tomorrow, tomorrow), lessonId: "logic", kind: "exam" },
+    { ...timed("study", "10:00", "12:00", tomorrow, tomorrow), lessonId: "logic", kind: "study" },
+    { ...timed("cancelled", "09:00", "10:00"), lessonId: "logic", kind: "study", status: "cancelled" },
+  ];
+  const result = lessonOverview(data, "logic", atTime(date, "08:00", zone));
+  assert.equal(result.daysUntil, 1);
+  assert.equal(result.studyMinutes, 60);
+});
+
+test("moving a missed study occurrence keeps the recurring series and creates one exception", () => {
+  const data = defaults();
+  const source = { ...timed("series", "09:00", "10:00"), kind: "study" as const, categoryId: "study" };
+  data.events = [
+    { ...source, recurrence: { frequency: "daily", weekdays: [], calendar: "persian", end: { type: "never" } } },
+    { ...timed("fixed", "10:00", "11:00"), kind: "class" },
+    { ...timed("cancelled", "08:00", "09:00"), kind: "study", status: "cancelled" },
+  ];
+  const now = atTime(date, "12:00", zone);
+  const items = overdueItems(data, now, addDays(date, -30));
+  assert.deepEqual(items.map((item) => item.event.eventId), ["series"]);
+  const start = atTime(date, "13:00", zone);
+  const moved = moveOverdue(data, items[0], { start, end: start + 60 * minute });
+  assert.equal(moved.events.length, 3);
+  assert.deepEqual(moved.events[0].timing, data.events[0].timing);
+  assert.equal(moved.events[0].exceptions[date]?.timing.start, instantISO(start));
+  assert.deepEqual(decodeBackup(encodeBackup(moved)).data.events[0].exceptions, moved.events[0].exceptions);
+});
+
+test("weekly copy excludes recurring events and resets status while preserving duration and course", () => {
+  const single = { ...timed("single", "10:00", "11:30"), status: "done" as const, lessonId: "logic" };
+  const repeated = { ...timed("series", "10:00", "11:00"), recurrence: {
+    frequency: "daily", weekdays: [], calendar: "persian", end: { type: "never" },
+  } } satisfies PlannerEvent;
+  assert.deepEqual(weekCopySources([single, repeated], weekBeginning(date, 6), zone).map(({ entry }) => entry.id), ["single"]);
+  const next = addDays(date, 7);
+  const copy = copyOccurrence(single, next, "10:00", zone);
+  assert.equal(copy.status, "planned");
+  assert.equal(copy.lessonId, "logic");
+  assert.equal(copy.timing.start, instantISO(atTime(next, "10:00", zone)));
+  assert.equal(copy.timing.end, instantISO(atTime(next, "11:30", zone)));
 });

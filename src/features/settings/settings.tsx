@@ -1,11 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Clock3, Download, HardDrive, Palette, Plus, Settings2, Trash2, Upload } from "lucide-react";
+import { Clock3, Download, HardDrive, Palette, Plus, Settings2, Target, Trash2, Upload } from "lucide-react";
 import { Button, Dialog, Field, IconButton } from "@/components/ui";
 import { decodeBackup, encodeBackup } from "@/features/backup/schema";
 import { settingsSchema } from "@/features/backup/schema";
-import { fa, latin, localizedTime, normalizeTime, todayIn, weekdays } from "@/features/calendar/dates";
+import { GoalFields, readGoal } from "@/features/goals/goal-fields";
+import { duration, fa, latin, localizedTime, normalizeTime, todayIn, weekdays } from "@/features/calendar/dates";
 import type { Category, PlannerData, Settings as Preferences } from "@/types/planner";
 
 function saveFile(contents: Blob, name: string) {
@@ -58,7 +59,7 @@ export function BackupPanel({ data, corruptRaw, revision, restore, clear, saveEr
     {preview && <Dialog title="بازیابی نسخهٔ پشتیبان" close={() => setPreview(null)}>
       <div className="form">
         <p>تاریخ خروجی {new Intl.DateTimeFormat("fa-IR", { calendar: data?.settings.calendar ?? "persian", dateStyle: "medium", timeStyle: "short", timeZone: data?.settings.zone ?? "Asia/Tehran" }).format(new Date(preview.exportedAt))}</p>
-        <p><strong>{fa(preview.data.events.length)} رویداد، {fa(preview.data.categories.length)} دسته و {fa(preview.data.tasks.length)} کار</strong></p>
+        <p><strong>{fa(preview.data.events.length)} رویداد، {fa(preview.data.categories.length)} دسته و {fa(preview.data.tasks.length)} کار</strong>{preview.data.lessons.length > 0 && <span> · {fa(preview.data.lessons.length)} درس</span>}</p>
         <p className="warning">با تأیید، داده‌های فعلی این مرورگر با محتوای بکاپ جایگزین می‌شوند.</p>
         {saveError && <p className="error" role="alert">{saveError}</p>}
         {preview.revision !== revision && <p className="error" role="alert">داده‌ها در تب دیگری تغییر کرده‌اند. فایل را دوباره انتخاب کنید.</p>}
@@ -151,8 +152,12 @@ export function SettingsForm({ current, revision, save }: {
   </form>;
 }
 
-export function Categories({ categories, save }: { categories: Category[]; save: (categories: Category[]) => boolean }) {
+export function Categories({ categories, revision, save, saveError }: {
+  categories: Category[]; revision: number; save: (categories: Category[]) => boolean; saveError?: string;
+}) {
   const [error, setError] = useState("");
+  const [goal, setGoal] = useState<{ category: Category; revision: number } | null>(null);
+  const [goalError, setGoalError] = useState("");
   return <section className="panel padded settings-card">
     <div className="panel-heading"><span className="tile amber"><Palette size={20} /></span><div><h2>دسته‌بندی‌ها</h2><p>رنگ دسته‌ها را تنظیم کن یا یک دستهٔ تازه بساز.</p></div></div>
     <div className="category-list">{categories.map((category) => <label key={category.id}>
@@ -160,6 +165,9 @@ export function Categories({ categories, save }: { categories: Category[]; save:
         save(categories.map((entry) => entry.id === category.id ? { ...entry, color: event.target.value } : entry));
       }} /> {category.name}
     </label>)}</div>
+    <div className="action-row">{categories.map((category) => <Button key={category.id} variant="ghost" onClick={() => {
+      setGoalError(""); setGoal({ category, revision });
+    }}><Target size={15} /> هدف هفتگی {category.name}{category.weeklyMinutes ? ` · ${duration(category.weeklyMinutes)}` : ""}</Button>)}</div>
     <form className="category-add" onSubmit={(event) => {
       event.preventDefault();
       const target = event.currentTarget;
@@ -167,12 +175,29 @@ export function Categories({ categories, save }: { categories: Category[]; save:
       const name = String(form.get("name")).trim();
       if (!name || categories.some((entry) => entry.name === name)) { setError("نام تازه و غیرتکراری وارد کنید."); return; }
       setError("");
-      if (save([...categories, { id: crypto.randomUUID(), name, color: String(form.get("color")) }])) target.reset();
+      if (save([...categories, { id: crypto.randomUUID(), name, color: String(form.get("color")), weeklyMinutes: 0 }])) target.reset();
     }}>
       <Field label="نام دستهٔ جدید"><input name="name" required maxLength={40} /></Field>
       <Field label="رنگ"><input name="color" type="color" defaultValue="#7654dc" /></Field>
       <Button type="submit"><Plus size={17} /> افزودن دسته</Button>
     </form>
+    {goal && <Dialog title={`هدف هفتگی ${goal.category.name}`} close={() => setGoal(null)}>
+      <form className="form" onSubmit={(event) => {
+        event.preventDefault();
+        if (goal.revision !== revision) return;
+        try {
+          const weeklyMinutes = readGoal(new FormData(event.currentTarget));
+          if (save(categories.map((entry) => entry.id === goal.category.id ? { ...entry, weeklyMinutes } : entry))) setGoal(null);
+        } catch (issue) { setGoalError((issue as Error).message); }
+      }}>
+        <GoalFields minutes={goal.category.weeklyMinutes} />
+        <p className="muted">برای حذف هدف، ساعت و دقیقه را صفر بگذار.</p>
+        {(goalError || saveError) && <p className="error" role="alert">{goalError || saveError}</p>}
+        {goal.revision !== revision && <p className="error" role="alert">داده‌ها تغییر کرده‌اند. فرم را دوباره باز کن.</p>}
+        <footer className="dialog-actions"><Button onClick={() => setGoal(null)}>انصراف</Button>
+          <Button type="submit" variant="primary" disabled={goal.revision !== revision}>ذخیرهٔ هدف</Button></footer>
+      </form>
+    </Dialog>}
     {error && <p className="error" role="alert">{error}</p>}
   </section>;
 }

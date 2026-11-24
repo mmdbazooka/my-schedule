@@ -1,4 +1,8 @@
-import type { PlannerData, Status, Priority } from "@/types/planner";
+import type { PlannerData, Status, Priority, EventKind } from "@/types/planner";
+
+export const eventKinds: Record<EventKind, string> = { general: "عمومی", class: "کلاس", exam: "امتحان", study: "مطالعه" };
+export const kindForCategory = (category?: string | null): EventKind =>
+  category === "study" ? "study" : category === "university" ? "class" : "general";
 
 export const statusLabels: Record<Status, string> = { planned: "برنامه‌ریزی‌شده", done: "انجام‌شده", cancelled: "لغوشده" };
 export const priorityLabels: Record<Priority, string> = { low: "کم", medium: "متوسط", high: "زیاد" };
@@ -12,7 +16,9 @@ export function defaults(): PlannerData {
       { id: "work", name: "کار", color: "#188673" },
       { id: "sport", name: "ورزش", color: "#cc4c79" },
       { id: "personal", name: "شخصی", color: "#5864bf" },
-    ],
+    ].map((category) => ({ ...category, weeklyMinutes: 0 })),
+    lessons: [],
+    preferences: [],
     events: [],
     tasks: [],
     settings: {

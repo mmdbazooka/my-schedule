@@ -3,7 +3,7 @@ import "@fontsource-variable/vazirmatn";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "برنامه‌ریز محمد",
+  title: "برنامه ریز",
   description: "تقویم شخصی برای برنامه‌ها، کارها و وقت‌های آزاد",
 };
 

@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, Clock3, List, Plus, Search, Sun, Timer } from "lucide-react";
-import { Button, DateField, Dialog, Empty, IconButton } from "@/components/ui";
-import { availableSlots } from "@/features/availability/availability";
+import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, Clock3, Copy, List, Plus, Search, Sun, Timer } from "lucide-react";
+import { Button, DateField, Dialog, Empty, Field, IconButton } from "@/components/ui";
+import { availableSlots, suggestions } from "@/features/availability/availability";
 import { expandEvents } from "@/features/events/recurrence";
 import type { EventDraft } from "@/features/events/event-form";
 import { statusLabels } from "@/lib/defaults";
-import type { Interval, Occurrence, PlannerData, Status } from "@/types/planner";
-import { addDays, addMonths, atTime, clockLabel, dateParts, duration, eventTime, fa, formatDay, fullDay, localizedTime, minute, monthLabel, monthStart, pad, parseDateInput, todayIn, weekday, weekdays, weekBeginning } from "./dates";
+import type { Interval, Occurrence, PlannerData, PlannerEvent, Status } from "@/types/planner";
+import { addDays, addMonths, atTime, clockLabel, dateParts, duration, eventTime, fa, formatDay, fullDay, latin, localizedTime, minute, monthLabel, monthStart, pad, parseDateInput, todayIn, weekday, weekdays, weekBeginning } from "./dates";
+import { CopyDialog } from "./copy-dialog";
 import { occurrencesOn, timelineLayout, visibleDates, wallRange } from "./layout";
 
 type View = "month" | "week" | "day" | "list";
@@ -72,7 +73,8 @@ function Timeline({ dates, events, data, slots, open, create, today }: {
   </div>;
 }
 
-export function CalendarView({ data, date, select, now, create, open }: {
+export function CalendarView({ data, date, select, now, create, open, revision, saveCopy, saveError }: {
+  revision: number; saveError?: string; saveCopy: (events: PlannerEvent[], revision: number) => boolean;
   data: PlannerData; date: string; select: (date: string) => void; now: number; create: (draft: EventDraft) => void; open: (event: Occurrence) => void;
 }) {
   const { calendar, zone, weekStart, buffer } = data.settings;
@@ -82,8 +84,11 @@ export function CalendarView({ data, date, select, now, create, open }: {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [status, setStatus] = useState<Status | "">("");
+  const [suggestCategory, setSuggestCategory] = useState("");
+  const [slotLength, setSlotLength] = useState("۶۰");
   const [picker, setPicker] = useState(false);
   const [pickerError, setPickerError] = useState("");
+  const [copy, setCopy] = useState<{ from: string; revision: number } | null>(null);
   const [dayDetail, setDayDetail] = useState<string | null>(null);
   const month = monthStart(date, calendar);
   const week = weekBeginning(date, weekStart);
@@ -95,6 +100,13 @@ export function CalendarView({ data, date, select, now, create, open }: {
   const events = all.filter((event) => (!category || event.categoryId === category) &&
     (!status || event.status === status) && event.title.toLocaleLowerCase("fa").includes(search.trim().toLocaleLowerCase("fa")));
   const slots = useMemo(() => view === "day" || view === "week" ? availableSlots(data, from, to, now) : [], [data, from, to, now, view]);
+  const wantedMinutes = Number(latin(slotLength));
+  const validLength = Number.isInteger(wantedMinutes) && wantedMinutes >= 1 && wantedMinutes <= 1440;
+  const useSuggestions = (view === "day" || view === "week") && Boolean(suggestCategory);
+  const suggestedSlots = useMemo(() => useSuggestions && validLength
+    ? suggestions(data, { categoryId: suggestCategory, due: null, minutes: wantedMinutes }, now, { from, to, limit: 12 })
+    : [], [data, from, now, suggestCategory, to, useSuggestions, validLength, wantedMinutes]);
+  const hasPreferred = data.preferences.some((entry) => entry.categoryId === suggestCategory);
   const title = view === "month" ? monthLabel(date, calendar) : view === "day" ? fullDay(date, calendar)
     : `${formatDay(from, calendar, { day: "numeric", month: "long" })} تا ${formatDay(addDays(to, -1), calendar, { day: "numeric", month: "long", year: "numeric" })}`;
 
@@ -120,6 +132,7 @@ export function CalendarView({ data, date, select, now, create, open }: {
         <label className="search"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="جست‌وجوی عنوان رویداد…" aria-label="جست‌وجوی عنوان رویداد" /></label>
         <select aria-label="فیلتر دسته" value={category} onChange={(event) => setCategory(event.target.value)}><option value="">همهٔ دسته‌ها</option>{data.categories.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</select>
         <select aria-label="فیلتر وضعیت" value={status} onChange={(event) => setStatus(event.target.value as Status | "")}><option value="">همهٔ وضعیت‌ها</option>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+        {view === "week" && <Button onClick={() => setCopy({ from: week, revision })}><Copy size={16} /> کپی برنامه به هفتهٔ بعد</Button>}
       </div>
       {view === "month" && <div className="month-wrap"><div className="month-grid">
         {dates.slice(0, 7).map((value) => <div className="month-weekday" key={value}>{weekdays[weekday(value)]}</div>)}
@@ -146,11 +159,27 @@ export function CalendarView({ data, date, select, now, create, open }: {
       </div>}
     </section>
     {(view === "day" || view === "week") && <section className="panel padded free-section">
-      <div className="panel-heading"><span className="tile mint"><Timer size={20} /></span><div><h2>بازه‌های آزاد</h2><p>{buffer ? `با ${duration(buffer)} حاشیه پیش و پس از رویدادهای اشغال‌کننده` : "در ساعات فعال، بدون حاشیهٔ استراحت"}</p></div></div>
-      {slots.length ? <div className="free-grid">{slots.map((slot) => <Button key={slot.start} onClick={() => create({ date: todayIn(slot.start, zone), slot })}>
-        <Plus size={16} /> <span>{formatDay(todayIn(slot.start, zone), calendar, { weekday: "short", day: "numeric" })} · {clockLabel(slot.start, zone)} تا {clockLabel(slot.end, zone)} · {duration((slot.end - slot.start) / minute)}</span>
-      </Button>)}</div> : <p className="muted">بازه‌ای که با تنظیمات زمان آزاد سازگار باشد پیدا نشد.</p>}
+      <div className="panel-heading"><span className="tile mint"><Timer size={20} /></span><div><h2>بازه‌های آزاد</h2><p>{buffer ? `با ${duration(buffer)} حاشیه و زمان رفت‌وآمد` : "در ساعات فعال، با در نظر گرفتن رفت‌وآمد"}</p></div></div>
+      <div className="suggest-controls">
+        <Field label="پیشنهاد برای دسته"><select value={suggestCategory} onChange={(event) => setSuggestCategory(event.target.value)}>
+          <option value="">همهٔ بازه‌های آزاد</option>
+          {data.categories.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+        </select></Field>
+        {useSuggestions && <Field label="مدت برنامه (دقیقه)"><input inputMode="numeric" value={slotLength}
+          onChange={(event) => setSlotLength(event.target.value)} /></Field>}
+      </div>
+      {useSuggestions && !validLength && <p className="error" role="alert">مدت را بین ۱ و ۱۴۴۰ دقیقه وارد کن.</p>}
+      {useSuggestions && validLength && !suggestedSlots.length && <p className="muted">در این بازه زمان آزادی با مدت لازم پیدا نشد.</p>}
+      {!useSuggestions && !slots.length && <p className="muted">بازه‌ای که با تنظیمات زمان آزاد سازگار باشد پیدا نشد.</p>}
+      <div className="free-grid">{(useSuggestions ? suggestedSlots : slots).map((slot) => <Button key={slot.start} onClick={() => create({
+        date: todayIn(slot.start, zone), slot, categoryId: useSuggestions ? suggestCategory : undefined,
+      })}>
+        <Plus size={16} /> <span>{formatDay(todayIn(slot.start, zone), calendar, { weekday: "short", day: "numeric" })} · {clockLabel(slot.start, zone)} تا {clockLabel(slot.end, zone)} · {duration((slot.end - slot.start) / minute)}
+          {hasPreferred && "preferred" in slot && ` · ${slot.preferred ? "مطابق ترجیح" : "آزاد خارج از ترجیح"}`}</span>
+      </Button>)}</div>
     </section>}
+    {copy && <CopyDialog data={data} from={copy.from} revision={copy.revision} stale={copy.revision !== revision}
+      save={saveCopy} close={() => setCopy(null)} saveError={saveError} />}
     {picker && <Dialog title="رفتن به تاریخ" close={() => setPicker(false)}>
       <form className="form" onSubmit={(event) => {
         event.preventDefault();

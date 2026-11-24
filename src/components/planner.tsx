@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, CalendarDays, CalendarRange, CheckCircle2, ClipboardList, Clock3, LayoutDashboard, LoaderCircle, Settings2, X } from "lucide-react";
+import { AlertTriangle, BookOpen, CalendarDays, CalendarRange, CheckCircle2, ClipboardList, Clock3, LayoutDashboard, LoaderCircle, Settings2, X } from "lucide-react";
 import { Button, Dialog, IconButton } from "@/components/ui";
 import { CalendarView } from "@/features/calendar/calendar-view";
 import { clockLabel, todayIn } from "@/features/calendar/dates";
@@ -10,16 +10,19 @@ import { sampleData } from "@/features/dashboard/sample";
 import { EventDetail } from "@/features/events/event-detail";
 import { EventForm, type EventDraft } from "@/features/events/event-form";
 import { occurrenceFields, seriesDate } from "@/features/events/recurrence";
+import { Preferences } from "@/features/settings/preferences";
 import { BackupPanel, Categories, SettingsForm } from "@/features/settings/settings";
+import { Lessons } from "@/features/lessons/lessons";
 import { Tasks } from "@/features/tasks/tasks";
 import { validateData } from "@/features/backup/schema";
 import { defaults } from "@/lib/defaults";
 import { clearData, readData, readRaw, storageKey, writeData } from "@/lib/storage";
-import type { Occurrence, PlannerData, PlannerEvent, Status } from "@/types/planner";
+import type { Occurrence, PlannerData, PlannerEvent, Status, Task } from "@/types/planner";
 
 const navigation = [
   { key: "dashboard", label: "داشبورد", icon: LayoutDashboard },
   { key: "calendar", label: "تقویم", icon: CalendarDays },
+  { key: "lessons", label: "درس‌ها", icon: BookOpen },
   { key: "tasks", label: "کارهای بدون زمان", icon: ClipboardList },
   { key: "settings", label: "تنظیمات", icon: Settings2 },
 ] as const;
@@ -135,12 +138,27 @@ export function Planner() {
     if (!data || !modal) return false;
     const exists = data.events.some((value) => value.id === event.id);
     const events = exists ? data.events.map((value) => value.id === event.id ? event : value) : [...data.events, event];
-    const tasks = data.tasks.map((task) =>
-      event.status === "cancelled" && task.eventId === event.id ? { ...task, eventId: null }
-        : task.id === taskId && event.status !== "cancelled" ? { ...task, eventId: event.id } : task);
+    const tasks = data.tasks.map((task) => {
+      if (task.id !== taskId && task.eventId !== event.id) return task;
+      if (event.status === "cancelled") return { ...task, eventId: null };
+      return { ...task, eventId: event.id, done: event.status === "done", lessonId: event.lessonId,
+        categoryId: task.categoryId === null && event.categoryId === data.categories[0].id ? null : event.categoryId };
+    });
     if (!commit({ ...data, events, tasks }, "رویداد ذخیره شد.", modal.revision)) return false;
     setModal(null);
     return true;
+  }
+
+  function saveTask(task: Task, revision: number) {
+    if (!data) return false;
+    const tasks = data.tasks.some((item) => item.id === task.id)
+      ? data.tasks.map((item) => item.id === task.id ? task : item)
+      : [...data.tasks, task];
+    const events = data.events.map((event) => event.id === task.eventId
+      ? { ...event, lessonId: task.lessonId, categoryId: task.categoryId ?? event.categoryId,
+        status: task.done ? "done" as const : "planned" as const }
+      : event);
+    return commit({ ...data, tasks, events }, "کار ذخیره شد.", revision);
   }
 
   const series = detail && data?.events.find((entry) => entry.id === detail.event.eventId);
@@ -162,8 +180,11 @@ export function Planner() {
     }
     const events = whole && action === "delete" ? data.events.filter((entry) => entry.id !== series.id)
       : data.events.map((entry) => entry.id === series.id ? replacement : entry);
-    const tasks = action === "delete" || action === "cancelled"
-      ? data.tasks.map((task) => task.eventId === series.id ? { ...task, eventId: null } : task) : data.tasks;
+    const tasks = data.tasks.map((task) => {
+      if (task.eventId !== series.id) return task;
+      if (action === "delete" || action === "cancelled") return { ...task, eventId: null };
+      return { ...task, done: action === "done" };
+    });
     const message = action === "delete" ? "رویداد حذف شد." : action === "cancelled" ? "رویداد لغو شد." : "وضعیت رویداد ذخیره شد.";
     if (commit({ ...data, events, tasks }, message, detail.revision)) setDetail(null);
   }
@@ -171,7 +192,7 @@ export function Planner() {
   return <div className="app-shell" data-theme={data?.settings.theme ?? "system"}>
     <a className="skip-link" href="#main-content" onClick={(event) => { event.preventDefault(); document.getElementById("main-content")?.focus(); }}>رفتن به محتوا</a>
     <aside className="sidebar">
-      <button className="brand" onClick={() => navigate("dashboard")}><span className="brand-icon"><CalendarRange size={24} strokeWidth={2.2} /></span><strong>برنامه‌ریز محمد</strong></button>
+      <button className="brand" onClick={() => navigate("dashboard")}><span className="brand-icon"><CalendarRange size={24} strokeWidth={2.2} /></span><strong>برنامه ریز</strong></button>
       <nav aria-label="ناوبری اصلی">
         <p>فضای کار</p>
         {navigation.map(({ key, label, icon: Icon }) =>
@@ -186,7 +207,7 @@ export function Planner() {
     </aside>
     <div className="workspace">
       <header className="topbar">
-        <div className="crumb"><span className="mobile-brand brand-icon"><CalendarRange size={19} /></span><span>برنامه‌ریز محمد</span><span className="crumb-divider">/</span><strong>{navigation.find((item) => item.key === route)?.label}</strong></div>
+        <div className="crumb"><span className="mobile-brand brand-icon"><CalendarRange size={19} /></span><span>برنامه ریز</span><span className="crumb-divider">/</span><strong>{navigation.find((item) => item.key === route)?.label}</strong></div>
         {usable && <div className="top-clock" aria-label="ساعت محلی"><Clock3 size={16} /><span>{clockLabel(now, zone)}</span></div>}
       </header>
       <main className="content" id="main-content" tabIndex={-1}>
@@ -199,10 +220,18 @@ export function Planner() {
             restore={(next, revision) => commit(next, "داده‌ها بازیابی شدند.", revision)} clear={(revision) => commit(null, "داده‌های برنامه حذف شدند.", revision)} />
         </>}
         {usable && <>
-          {route === "dashboard" && <Dashboard data={data} now={now} day={date} select={setSelected} create={create} open={open}
+          {route === "dashboard" && <Dashboard data={data} now={now} day={date} select={setSelected} create={create} open={open} revision={store.revision}
+            saveError={notice?.error ? notice.text : undefined} reschedule={(pending, revision) => commit(pending, "زمان‌بندی به‌روز شد.", revision)}
             calendarPage={() => navigate("calendar")} sample={() => commit(sampleData(data, today), "برنامهٔ ساختگی بارگذاری شد.")} />}
-          {route === "calendar" && <CalendarView data={data} date={date} select={setSelected} now={now} create={create} open={open} />}
-          {route === "tasks" && <Tasks saveError={notice?.error ? notice.text : undefined} data={data} now={now} create={create} revision={store.revision}
+          {route === "calendar" && <CalendarView data={data} date={date} select={setSelected} now={now} create={create} open={open}
+            revision={store.revision} saveError={notice?.error ? notice.text : undefined}
+            saveCopy={(events, revision) => commit({ ...data, events: [...data.events, ...events] }, "رویدادها در هفتهٔ بعد کپی شدند.", revision)} />}
+          {route === "lessons" && <Lessons data={data} now={now} revision={store.revision} create={create} open={open}
+            saveError={notice?.error ? notice.text : undefined} saveTask={saveTask} saveLesson={(lesson, revision) => commit({
+              ...data, lessons: data.lessons.some((item) => item.id === lesson.id)
+                ? data.lessons.map((item) => item.id === lesson.id ? lesson : item) : [...data.lessons, lesson],
+            }, "درس ذخیره شد.", revision)} />}
+          {route === "tasks" && <Tasks saveError={notice?.error ? notice.text : undefined} data={data} now={now} create={create} revision={store.revision} saveTask={saveTask}
             save={(tasks, message) => commit({ ...data, tasks }, message)}
             unschedule={(task) => commit({
               ...data,
@@ -214,7 +243,9 @@ export function Planner() {
             <div className="settings-flow">
               <SettingsForm current={data.settings} revision={store.revision}
                 save={(settings) => commit({ ...data, settings }, "تنظیمات ذخیره شدند.")} />
-              <Categories categories={data.categories} save={(categories) => commit({ ...data, categories }, "دسته‌بندی ذخیره شد.")} />
+              <Preferences data={data} revision={store.revision} saveError={notice?.error ? notice.text : undefined}
+                save={(preferences, revision) => commit({ ...data, preferences }, "ترجیحات زمانی ذخیره شدند.", revision)} />
+              <Categories categories={data.categories} revision={store.revision} saveError={notice?.error ? notice.text : undefined} save={(categories) => commit({ ...data, categories }, "دسته‌بندی ذخیره شد.")} />
               <BackupPanel saveError={notice?.error ? notice.text : undefined} data={data} revision={store.revision}
                 restore={(next, revision) => commit(next, "داده‌ها بازیابی شدند.", revision)} clear={(revision) => commit(null, "داده‌های برنامه حذف شدند.", revision)} />
             </div>

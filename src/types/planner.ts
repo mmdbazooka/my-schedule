@@ -3,10 +3,25 @@ export type Theme = "light" | "dark" | "system";
 export type Status = "planned" | "done" | "cancelled";
 export type Priority = "low" | "medium" | "high";
 
+export type EventKind = "general" | "class" | "exam" | "study";
+
+export interface Lesson {
+  id: string;
+  name: string;
+  weeklyMinutes: number;
+}
+
+export interface TimePreference extends ActiveHours {
+  id: string;
+  categoryId: string;
+  weekday: number;
+}
+
 export interface Category {
   id: string;
   name: string;
   color: string;
+  weeklyMinutes: number;
 }
 
 export type Timing =
@@ -22,6 +37,10 @@ export interface EventFields {
   title: string;
   categoryId: string;
   timing: Timing;
+  kind: EventKind;
+  lessonId: string | null;
+  travelBefore: number;
+  travelAfter: number;
   location: string;
   link: string;
   description: string;
@@ -51,6 +70,9 @@ export interface Task {
   priority: Priority;
   due: string | null;
   eventId: string | null;
+  lessonId: string | null;
+  categoryId: string | null;
+  done: boolean;
 }
 
 export interface ActiveHours {
@@ -70,6 +92,8 @@ export interface Settings {
 
 export interface PlannerData {
   categories: Category[];
+  lessons: Lesson[];
+  preferences: TimePreference[];
   events: PlannerEvent[];
   tasks: Task[];
   settings: Settings;
