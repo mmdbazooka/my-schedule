@@ -1,0 +1,178 @@
+"use client";
+
+import { useRef, useState } from "react";
+import { Clock3, Download, HardDrive, Palette, Plus, Settings2, Trash2, Upload } from "lucide-react";
+import { Button, Dialog, Field, IconButton } from "@/components/ui";
+import { decodeBackup, encodeBackup } from "@/features/backup/schema";
+import { settingsSchema } from "@/features/backup/schema";
+import { fa, latin, localizedTime, normalizeTime, todayIn, weekdays } from "@/features/calendar/dates";
+import type { Category, PlannerData, Settings as Preferences } from "@/types/planner";
+
+function saveFile(contents: Blob, name: string) {
+  const url = URL.createObjectURL(contents);
+  const download = document.createElement("a");
+  download.href = url;
+  download.download = name;
+  download.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+export function downloadBackup(data: PlannerData) {
+  const name = `mohammad-planner-${todayIn(Date.now(), data.settings.zone)}.json`;
+  saveFile(new Blob([encodeBackup(data)], { type: "application/json" }), name);
+}
+
+export function downloadAttachment(name: string, base64: string) {
+  const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+  saveFile(new Blob([bytes], { type: "application/pdf" }), name);
+}
+
+export function BackupPanel({ data, corruptRaw, revision, restore, clear, saveError }: {
+  saveError?: string; data: PlannerData | null; corruptRaw?: string | null; revision: number;
+  restore: (data: PlannerData, revision: number) => boolean; clear: (revision: number) => boolean;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<(ReturnType<typeof decodeBackup> & { revision: number }) | null>(null);
+  const [erase, setErase] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  return <section className="panel padded settings-card">
+    <div className="panel-heading"><span className="tile blue"><HardDrive size={20} /></span><div><h2>پشتیبان‌گیری و بازیابی</h2><p>داده‌ها فقط در حافظهٔ همین مرورگر و همین آدرس هستند.</p></div></div>
+    <p>برای انتقال به دامنهٔ Vercel یا دستگاه دیگر، بکاپ بگیر و در مقصد بازیابی کن. فایل بکاپ می‌تواند شامل اطلاعات شخصی، لینک جلسات و پیوست‌ها باشد.</p>
+    <div className="action-row">
+      {data && <Button onClick={() => downloadBackup(data)}><Download size={17} /> دانلود بکاپ JSON</Button>}
+      {corruptRaw && <Button onClick={() => saveFile(new Blob([corruptRaw], { type: "text/plain" }), "mohammad-planner-recovery.txt")}><Download size={17} /> دریافت دادهٔ خام</Button>}
+      <Button onClick={() => ref.current?.click()}><Upload size={17} /> بازیابی از فایل</Button>
+      <input type="file" aria-label="فایل بکاپ JSON" ref={ref} hidden accept=".json,application/json" onChange={async (event) => {
+        const file = event.currentTarget.files?.[0];
+        event.currentTarget.value = "";
+        if (!file) return;
+        setError("");
+        try {
+          if (file.size > 16 * 1024 * 1024) throw new Error("حجم فایل پشتیبان بیشتر از ۱۶ مگابایت است.");
+          setPreview({ ...decodeBackup(await file.text()), revision });
+        } catch (issue) { setError((issue as Error).message); }
+      }} />
+      <Button variant="danger" onClick={() => setErase(revision)}><Trash2 size={17} /> حذف همهٔ داده‌های برنامه</Button>
+    </div>
+    {error && <p className="error" role="alert">{error}</p>}
+    {preview && <Dialog title="بازیابی نسخهٔ پشتیبان" close={() => setPreview(null)}>
+      <div className="form">
+        <p>تاریخ خروجی {new Intl.DateTimeFormat("fa-IR", { calendar: data?.settings.calendar ?? "persian", dateStyle: "medium", timeStyle: "short", timeZone: data?.settings.zone ?? "Asia/Tehran" }).format(new Date(preview.exportedAt))}</p>
+        <p><strong>{fa(preview.data.events.length)} رویداد، {fa(preview.data.categories.length)} دسته و {fa(preview.data.tasks.length)} کار</strong></p>
+        <p className="warning">با تأیید، داده‌های فعلی این مرورگر با محتوای بکاپ جایگزین می‌شوند.</p>
+        {saveError && <p className="error" role="alert">{saveError}</p>}
+        {preview.revision !== revision && <p className="error" role="alert">داده‌ها در تب دیگری تغییر کرده‌اند. فایل را دوباره انتخاب کنید.</p>}
+        <div className="dialog-actions">
+          {data && <Button onClick={() => downloadBackup(data)}><Download size={16} /> دانلود بکاپ فعلی</Button>}
+          <Button onClick={() => setPreview(null)}>انصراف</Button>
+          <Button variant="primary" disabled={preview.revision !== revision} onClick={() => {
+            if (restore(preview.data, preview.revision)) setPreview(null);
+          }}>تأیید جایگزینی</Button>
+        </div>
+      </div>
+    </Dialog>}
+    {erase !== null && <Dialog title="حذف همهٔ داده‌ها" close={() => setErase(null)}>
+      <p>رویدادها، دسته‌ها، کارها، پیوست‌ها و تنظیمات برنامه از این مرورگر پاک می‌شوند.</p>
+      {saveError && <p className="error" role="alert">{saveError}</p>}
+      {erase !== revision && <p className="error" role="alert">داده‌ها در تب دیگری تغییر کرده‌اند. دوباره تأیید را باز کنید.</p>}
+      <div className="dialog-actions">
+        {data && <Button onClick={() => downloadBackup(data)}>دانلود بکاپ فعلی</Button>}
+        <Button onClick={() => setErase(null)}>انصراف</Button>
+        <Button variant="danger" disabled={erase !== revision} onClick={() => { if (clear(erase)) setErase(null); }}>تأیید حذف همه</Button>
+      </div>
+    </Dialog>}
+  </section>;
+}
+
+const knownZones = ["Asia/Tehran", "Asia/Dubai", "Asia/Kabul", "Europe/London", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "UTC"];
+
+export function SettingsForm({ current, revision, save }: {
+  current: Preferences; revision: number; save: (settings: Preferences) => boolean;
+}) {
+  const [edit, setEdit] = useState<{ value: Preferences; revision: number } | null>(null);
+  const [error, setError] = useState("");
+  const settings = edit?.value ?? current;
+  const stale = edit !== null && edit.revision !== revision;
+  const change = (patch: Partial<Preferences>) => setEdit({ value: { ...settings, ...patch }, revision: edit?.revision ?? revision });
+  const updateDay = (day: number, ranges: Preferences["active"][number]) => change({ active: settings.active.map((value, index) => index === day ? ranges : value) });
+
+  return <form className="settings-flow" onSubmit={(event) => {
+    event.preventDefault();
+    if (stale) return;
+    const checked = settingsSchema.safeParse({
+      ...settings,
+      active: settings.active.map((ranges) => ranges.map(({ start, end }) => ({ start: normalizeTime(start), end: normalizeTime(end) }))),
+    });
+    if (!checked.success) {
+      setError("منطقهٔ زمانی، حداقل مدت و ساعت‌های فعال را بررسی کنید. پایان هر بازه باید بعد از شروع باشد.");
+      return;
+    }
+    setError("");
+    if (save(checked.data)) setEdit(null);
+  }}>
+    <section className="panel padded settings-card">
+      <div className="panel-heading"><span className="tile violet"><Settings2 size={20} /></span><div><h2>نمایش و تقویم</h2><p>زبان نمایش فارسی و ساعت‌ها ۲۴ساعته‌اند.</p></div></div>
+      <div className="form-grid">
+        <Field label="تقویم"><select value={settings.calendar} onChange={(event) => change({ calendar: event.target.value as Preferences["calendar"] })}>
+          <option value="persian">شمسی</option><option value="gregory">میلادی</option></select></Field>
+        <Field label="تم"><select value={settings.theme} onChange={(event) => change({ theme: event.target.value as Preferences["theme"] })}>
+          <option value="system">سیستم</option><option value="light">روشن</option><option value="dark">تاریک</option></select></Field>
+        <Field label="منطقهٔ زمانی" hint="نام IANA را انتخاب یا وارد کنید.">
+          <input dir="ltr" list="time-zones" value={settings.zone} required onChange={(event) => change({ zone: event.target.value.trim() })} />
+        </Field>
+        <datalist id="time-zones">{Array.from(new Set([...knownZones, ...Intl.supportedValuesOf("timeZone")])).map((value) => <option value={value} key={value} />)}</datalist>
+        <Field label="شروع هفته"><select value={settings.weekStart} onChange={(event) => change({ weekStart: Number(event.target.value) })}>
+          {weekdays.map((value, index) => <option key={value} value={index}>{value}</option>)}</select></Field>
+      </div>
+    </section>
+    <section className="panel padded settings-card">
+      <div className="panel-heading"><span className="tile mint"><Clock3 size={20} /></span><div><h2>ساعات فعال و استراحت</h2><p>روز بدون محدودهٔ زمانی غیرفعال است. پایان روز را می‌توان ۲۴:۰۰ وارد کرد.</p></div></div>
+      <div className="form-grid">
+        <Field label="حداقل بازهٔ آزاد (دقیقه)"><input inputMode="numeric" value={Number.isFinite(settings.minimum) ? fa(settings.minimum) : ""} onChange={(event) => change({ minimum: event.target.value ? Number(latin(event.target.value)) : NaN })} /></Field>
+        <Field label="حاشیهٔ استراحت (دقیقه)" hint="قبل و بعد از هر رویداد در پیشنهادها اعمال می‌شود."><input inputMode="numeric" value={Number.isFinite(settings.buffer) ? fa(settings.buffer) : ""} onChange={(event) => change({ buffer: event.target.value ? Number(latin(event.target.value)) : NaN })} /></Field>
+      </div>
+      <div className="active-week">{weekdays.map((_, index) => (index + current.weekStart) % 7).map((index) =>
+        <div className="active-day" key={index}><strong>{weekdays[index]}</strong><div className="active-ranges">
+          {settings.active[index].map((range, rangeIndex) => <div className="active-range" key={rangeIndex}>
+            {(["start", "end"] as const).map((key) => <input key={key} dir="ltr" inputMode="numeric" aria-label={`${weekdays[index]}، ${key === "start" ? "شروع" : "پایان"} بازهٔ ${fa(rangeIndex + 1)}`}
+              value={localizedTime(range[key])} onChange={(event) => updateDay(index, settings.active[index].map((item, position) =>
+                position === rangeIndex ? { ...item, [key]: latin(event.target.value) } : item))} />)}
+            <IconButton label={`حذف بازهٔ ${weekdays[index]}`} onClick={() => updateDay(index, settings.active[index].filter((_, position) => position !== rangeIndex))}><Trash2 size={16} /></IconButton>
+          </div>)}
+          {!settings.active[index].length && <span className="muted">غیرفعال</span>}
+        </div><Button variant="ghost" disabled={settings.active[index].length >= 24} onClick={() => updateDay(index, [...settings.active[index], { start: "09:00", end: "13:00" }])}><Plus size={16} /> بازه</Button></div>)}</div>
+      {error && <p className="error" role="alert">{error}</p>}
+      {stale && <p className="error" role="alert">داده‌ها در تب دیگری تغییر کرده‌اند. برای ادامه، تغییرات این فرم را کنار بگذارید.</p>}
+      <div className="action-row">
+        <Button variant="primary" type="submit" disabled={!edit || stale}>ذخیرهٔ تنظیمات</Button>
+        {edit && <Button onClick={() => { setEdit(null); setError(""); }}>کنار گذاشتن تغییرات</Button>}
+      </div>
+    </section>
+  </form>;
+}
+
+export function Categories({ categories, save }: { categories: Category[]; save: (categories: Category[]) => boolean }) {
+  const [error, setError] = useState("");
+  return <section className="panel padded settings-card">
+    <div className="panel-heading"><span className="tile amber"><Palette size={20} /></span><div><h2>دسته‌بندی‌ها</h2><p>رنگ دسته‌ها را تنظیم کن یا یک دستهٔ تازه بساز.</p></div></div>
+    <div className="category-list">{categories.map((category) => <label key={category.id}>
+      <input type="color" aria-label={`تغییر رنگ ${category.name}`} value={category.color} onChange={(event) => {
+        save(categories.map((entry) => entry.id === category.id ? { ...entry, color: event.target.value } : entry));
+      }} /> {category.name}
+    </label>)}</div>
+    <form className="category-add" onSubmit={(event) => {
+      event.preventDefault();
+      const target = event.currentTarget;
+      const form = new FormData(target);
+      const name = String(form.get("name")).trim();
+      if (!name || categories.some((entry) => entry.name === name)) { setError("نام تازه و غیرتکراری وارد کنید."); return; }
+      setError("");
+      if (save([...categories, { id: crypto.randomUUID(), name, color: String(form.get("color")) }])) target.reset();
+    }}>
+      <Field label="نام دستهٔ جدید"><input name="name" required maxLength={40} /></Field>
+      <Field label="رنگ"><input name="color" type="color" defaultValue="#7654dc" /></Field>
+      <Button type="submit"><Plus size={17} /> افزودن دسته</Button>
+    </form>
+    {error && <p className="error" role="alert">{error}</p>}
+  </section>;
+}

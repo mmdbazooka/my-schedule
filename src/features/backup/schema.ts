@@ -1,0 +1,146 @@
+import { z } from "zod";
+import { addDays, day, epoch, weekday } from "@/features/calendar/dates";
+import { seriesDate, validOccurrenceDate } from "@/features/events/recurrence";
+import type { PlannerData } from "@/types/planner";
+
+const id = z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/);
+const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
+  try { return value >= "1900-01-01" && value <= "2200-01-01" && day(value).toString() === value; } catch { return false; }
+});
+const instant = z.string().regex(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,3})?(?:Z|[+-]\d\d:\d\d)$/).refine((value) => {
+  try { return Number.isFinite(epoch(value)) && value.slice(0, 10) >= "1899-12-30" && value.slice(0, 10) <= "2200-01-02"; } catch { return false; }
+});
+const zone = z.string().max(100).refine((value) => {
+  try { new Intl.DateTimeFormat("fa", { timeZone: value }); return true; } catch { return false; }
+});
+const title = z.string().trim().min(1).max(160);
+const calendar = z.enum(["persian", "gregory"]);
+const color = z.string().regex(/^#[\da-fA-F]{6}$/);
+const clock = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
+const weekdayNumber = z.number().int().min(0).max(6);
+const safeLink = z.string().max(1500).refine((value) => {
+  if (!value) return true;
+  try { return ["http:", "https:"].includes(new URL(value).protocol); } catch { return false; }
+});
+const timing = z.discriminatedUnion("allDay", [
+  z.object({ allDay: z.literal(true), start: date, end: date }),
+  z.object({ allDay: z.literal(false), start: instant, end: instant, zone }),
+]).refine((value) => {
+  try { return value.allDay ? value.end > value.start : epoch(value.end) > epoch(value.start); } catch { return false; }
+});
+export const eventFieldsSchema = z.object({
+  title, categoryId: id, timing, location: z.string().max(300), link: safeLink,
+  links: z.array(z.object({ label: z.string().trim().min(1).max(100), url: safeLink.refine(Boolean) })).max(10).default([]),
+  attachments: z.array(z.object({
+    name: z.string().min(5).max(180).regex(/\.pdf$/i),
+    base64: z.string().max(1_398_104).regex(/^JVBERi[0123][A-Za-z0-9+/]*={0,2}$/).refine((value) => {
+      const size = (value.length / 4) * 3 - (value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0);
+      return value.length % 4 === 0 && size <= 1_048_576;
+    }),
+  })).max(3).default([]),
+  description: z.string().max(3000), status: z.enum(["planned", "done", "cancelled"]), busy: z.boolean(),
+});
+const recurrence = z.object({
+  frequency: z.enum(["daily", "weekly", "monthly"]),
+  weekdays: z.array(weekdayNumber).max(7).refine((values) => new Set(values).size === values.length),
+  calendar,
+  end: z.discriminatedUnion("type", [
+    z.object({ type: z.literal("never") }),
+    z.object({ type: z.literal("until"), date }),
+    z.object({ type: z.literal("count"), count: z.number().int().min(1).max(100_000) }),
+  ]),
+});
+const event = eventFieldsSchema.extend({ id, recurrence: recurrence.nullable(), exceptions: z.record(date, eventFieldsSchema.nullable()) });
+const task = z.object({
+  id, title, minutes: z.number().int().min(1).max(1440), priority: z.enum(["low", "medium", "high"]),
+  due: date.nullable(), eventId: id.nullable(),
+});
+export const settingsSchema = z.object({
+  calendar, zone, weekStart: weekdayNumber, theme: z.enum(["light", "dark", "system"]),
+  minimum: z.number().int().min(1).max(720), buffer: z.number().int().min(0).max(180),
+  active: z.array(z.array(z.object({ start: clock, end: clock.or(z.literal("24:00")) }))
+    .max(24).refine((ranges) => ranges.every((range) => range.start < range.end))).length(7),
+});
+
+const dataSchema = z.object({
+  categories: z.array(z.object({ id, name: title.max(40), color })).min(1).max(200),
+  events: z.array(event).max(10000),
+  tasks: z.array(task).max(10000),
+  settings: settingsSchema,
+});
+const envelope = z.object({ version: z.number().int(), exportedAt: z.iso.datetime({ offset: true }), data: z.unknown() });
+const unique = (values: string[]) => new Set(values).size === values.length;
+
+export const version = 2;
+
+export function validateData(input: unknown): PlannerData {
+  const parsed = dataSchema.safeParse(input);
+  if (!parsed.success) throw new Error("ساختار داده یا یکی از مقادیر تاریخ، زمان یا تنظیمات معتبر نیست.");
+  const data = parsed.data;
+  const categoryIds = new Set(data.categories.map((entry) => entry.id));
+  const eventsById = new Map(data.events.map((entry) => [entry.id, entry]));
+  if (categoryIds.size !== data.categories.length || eventsById.size !== data.events.length ||
+    !unique(data.tasks.map((entry) => entry.id))) throw new Error("فایل دارای شناسهٔ تکراری است.");
+  for (const entry of data.events) {
+    const dates = Object.keys(entry.exceptions);
+    if (!categoryIds.has(entry.categoryId) || Object.values(entry.exceptions).some((value) => value && !categoryIds.has(value.categoryId))) {
+      throw new Error("یکی از رویدادها به دسته‌ای ناموجود ارجاع دارد.");
+    }
+    if (!entry.recurrence && dates.length) throw new Error("استثنا بدون سری تکرار معتبر نیست.");
+    if (entry.recurrence) {
+      const anchor = seriesDate(entry.timing);
+      if (entry.recurrence.frequency === "weekly" && !entry.recurrence.weekdays.includes(weekday(anchor))) {
+        throw new Error("روز شروع در روزهای سری هفتگی وجود ندارد.");
+      }
+      if (entry.recurrence.end.type === "until" && entry.recurrence.end.date < anchor) {
+        throw new Error("تاریخ پایان تکرار پیش از شروع سری است.");
+      }
+      if (dates.some((key) => !validOccurrenceDate(entry, key))) throw new Error("استثنا به نوبت معتبری از سری ارجاع ندارد.");
+    }
+  }
+  const linked = data.tasks.flatMap((entry) => entry.eventId ? [entry.eventId] : []);
+  if (!unique(linked) || linked.some((key) => {
+    const entry = eventsById.get(key);
+    return !entry || entry.recurrence || entry.status === "cancelled";
+  })) throw new Error("زمان‌بندی یکی از کارها به رویداد معتبری ارجاع ندارد.");
+  return data;
+}
+
+// Version 1 had inclusive all-day end dates and no buffer setting.
+function migrateV1(input: unknown) {
+  const object = z.object({
+    categories: z.unknown(), settings: z.record(z.string(), z.unknown()),
+    events: z.array(z.record(z.string(), z.unknown())), tasks: z.unknown(),
+  }).parse(input);
+  const migrateFields = (entry: Record<string, unknown>) => {
+    const timing = z.record(z.string(), z.unknown()).parse(entry.timing);
+    return { ...entry, timing: timing.allDay === true ? { ...timing, end: addDays(date.parse(timing.end), 1) } : timing };
+  };
+  return {
+    ...object, settings: { ...object.settings, buffer: 0 },
+    events: object.events.map((entry) => {
+      const exceptions = z.record(z.string(), z.record(z.string(), z.unknown()).nullable()).parse(entry.exceptions ?? {});
+      return { ...migrateFields(entry), exceptions: Object.fromEntries(Object.entries(exceptions)
+        .map(([key, fields]) => [key, fields && migrateFields(fields)])) };
+    }),
+  };
+}
+
+export function encodeBackup(data: PlannerData, exportedAt = new Date().toISOString()) {
+  return JSON.stringify({ version, exportedAt, data }, null, 2);
+}
+
+export function decodeBackup(raw: string) {
+  let input: unknown;
+  try { input = JSON.parse(raw); } catch { throw new Error("فایل JSON خوانا نیست."); }
+  const parsed = envelope.safeParse(input);
+  if (!parsed.success) throw new Error("سربرگ یا تاریخ فایل پشتیبان معتبر نیست.");
+  const file = parsed.data;
+  if (file.version > version) throw new Error("نسخهٔ بکاپ جدیدتر از نسخهٔ برنامه است.");
+  if (file.version !== 1 && file.version !== version) throw new Error("این نسخهٔ بکاپ پشتیبانی نمی‌شود.");
+  let data = file.data;
+  if (file.version === 1) {
+    try { data = migrateV1(data); } catch { throw new Error("تبدیل ساختار بکاپ نسخهٔ ۱ ممکن نبود."); }
+  }
+  return { exportedAt: file.exportedAt, data: validateData(data) };
+}
