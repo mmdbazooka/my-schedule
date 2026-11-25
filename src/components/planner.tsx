@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, BarChart3, Moon, Sun, Plus, BookOpen, CalendarDays, CalendarRange, CheckCircle2, ClipboardList, Clock3, LayoutDashboard, LoaderCircle, Settings2, StickyNote, UserRound, X } from "lucide-react";
+import { AlertTriangle, BarChart3, Moon, Sun, Plus, BookOpen, CalendarDays, CalendarRange, CheckCircle2, ClipboardList, Clock3, Globe2, LayoutDashboard, LoaderCircle, Settings2, StickyNote, UserRound, X } from "lucide-react";
 import { Capture } from "./capture";
+import { TimeConverter } from "@/features/time-converter/time-converter";
 import { Notes } from "@/features/notes/notes";
 import { Review } from "@/features/review/review";
 import { DeviceSync } from "@/features/sync/device-sync";
@@ -30,6 +31,7 @@ const navigation = [
   { key: "tasks", label: "کارهای بدون زمان", icon: ClipboardList },
   { key: "notes", label: "یادداشت‌ها", icon: StickyNote },
   { key: "review", label: "مرور هفتگی", icon: BarChart3 },
+  { key: "time-converter", label: "تبدیل ساعت", icon: Globe2 },
   { key: "settings", label: "تنظیمات", icon: Settings2 },
 ] as const;
 type Page = typeof navigation[number]["key"];
@@ -252,6 +254,7 @@ export function Planner() {
           {route === "notes" && <Notes notes={data.notes} settings={data.settings} revision={store.revision}
             saveError={notice?.error ? notice.text : undefined}
             save={(notes, message, revision) => commit({ ...data, notes }, message, revision)} />}
+          {route === "time-converter" && <TimeConverter now={now} settings={data.settings} create={create} />}
           {route === "review" && <Review data={data} now={now} open={open} />}
           {route === "calendar" && <CalendarView data={data} date={date} select={setSelected} now={now} create={create} open={open}
             revision={store.revision} saveError={notice?.error ? notice.text : undefined}

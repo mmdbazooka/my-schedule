@@ -17,6 +17,7 @@ export interface EventDraft {
   title?: string;
   date: string;
   slot?: Interval;
+  zone?: string;
   categoryId?: string;
   fields?: EventFields;
   series?: PlannerEvent;
@@ -32,7 +33,7 @@ export function EventForm({ data, draft, cancel, stale, save }: {
 }) {
   const { calendar, zone, weekStart } = data.settings;
   const fields = draft.fields;
-  const editZone = fields?.timing.allDay === false ? fields.timing.zone : zone;
+  const editZone = fields?.timing.allDay === false ? fields.timing.zone : draft.zone ?? zone;
   const initial = fields?.timing;
   const rule = draft.occurrence ? null : draft.series?.recurrence;
   const linkedTask = data.tasks.find((task) => task.id === draft.taskId || task.eventId === draft.series?.id);
@@ -83,10 +84,12 @@ export function EventForm({ data, draft, cancel, stale, save }: {
           try { return instantISO(atTime(date, time, editZone, "reject")); }
           catch { throw new Error("این ساعت در منطقهٔ زمانی رویداد ناموجود یا مبهم است. ساعت دیگری انتخاب کنید."); }
         };
+        const originalTiming = initial?.allDay === false ? initial : draft.zone && draft.slot
+          ? { start: instantISO(draft.slot.start), end: instantISO(draft.slot.end) } : undefined;
         timing = {
           allDay: false, zone: editZone,
-          start: timed(start, times[0], initial?.allDay === false ? initial.start : undefined),
-          end: timed(end, times[1], initial?.allDay === false ? initial.end : undefined),
+          start: timed(start, times[0], originalTiming?.start),
+          end: timed(end, times[1], originalTiming?.end),
         };
         if (epoch(timing.end) <= epoch(timing.start)) throw new Error("پایان باید بعد از شروع باشد. برای عبور از نیمه‌شب، تاریخ پایان را تغییر دهید.");
       }
