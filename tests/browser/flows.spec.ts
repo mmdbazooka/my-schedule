@@ -34,8 +34,8 @@ test("class exceptions, meeting conflict, linked task, attachment and atomic bac
 
   await page.getByRole("button", { name: "کلاس", exact: true }).click();
   await dialog(page).getByLabel("عنوان", { exact: true }).fill("کلاس آزمایشی");
-  await dialog(page).getByLabel("ساعت شروع").fill("۱۰:۰۰");
-  await dialog(page).getByLabel("ساعت پایان").fill("۱۱:۰۰");
+  await dialog(page).getByLabel("ساعت شروع", { exact: true }).fill("۱۰:۰۰");
+  await dialog(page).getByLabel("ساعت پایان", { exact: true }).fill("۱۱:۰۰");
   await dialog(page).getByLabel("تکرار", { exact: true }).click();
   await page.getByRole("option", { name:"هفتگی", exact:true }).click();
   await dialog(page).getByLabel("دوشنبه", { exact: true }).check();
@@ -57,8 +57,8 @@ test("class exceptions, meeting conflict, linked task, attachment and atomic bac
   await nav(page, "داشبورد").click();
   await page.getByRole("button", { name: "جلسه", exact: true }).click();
   await dialog(page).getByLabel("عنوان", { exact: true }).fill("جلسهٔ آزمایشی");
-  await dialog(page).getByLabel("ساعت شروع").fill("۱۰۱۵");
-  await dialog(page).getByLabel("ساعت پایان").fill("۱۰:۴۵");
+  await dialog(page).getByLabel("ساعت شروع", { exact: true }).fill("۱۰۱۵");
+  await dialog(page).getByLabel("ساعت پایان", { exact: true }).fill("۱۰:۴۵");
   await dialog(page).getByLabel("لینک جلسه").fill("https://example.org/meeting");
   await dialog(page).getByRole("button", { name: "افزودن لینک" }).click();
   await dialog(page).getByLabel("عنوان لینک").fill("شرح موقعیت شغلی");
@@ -83,8 +83,8 @@ test("class exceptions, meeting conflict, linked task, attachment and atomic bac
   await dialog(page).getByRole("button", { name: "ذخیرهٔ کار" }).click();
   await page.getByRole("button", { name: "پیشنهاد زمان" }).click();
   await dialog(page).getByRole("button", { name: /۱۱:۱۵ تا ۱۲:۴۵/ }).click();
-  await expect(dialog(page).getByLabel("ساعت شروع")).toHaveValue("۱۱:۱۵");
-  await expect(dialog(page).getByLabel("ساعت پایان")).toHaveValue("۱۲:۴۵");
+  await expect(dialog(page).getByLabel("ساعت شروع", { exact: true })).toHaveValue("۱۱:۱۵");
+  await expect(dialog(page).getByLabel("ساعت پایان", { exact: true })).toHaveValue("۱۲:۴۵");
   await dialog(page).getByRole("button", { name: "ذخیرهٔ رویداد" }).click();
   await expect(page.getByText("زمان‌بندی شده", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "پیشنهاد زمان" })).toHaveCount(0);
@@ -192,5 +192,50 @@ test("RTL desktop and mobile calendar controls, keyboard dialogs and no page ove
     await expect(dialog(page).getByLabel("تاریخ شروع", { exact: true })).toHaveValue(dateInput(addDays(day, 1), "persian"));
     await dialog(page).press("Escape");
     await expect(newEvent).toBeFocused();
+  }
+});
+
+test("the custom time picker supports touch, exact minutes and keyboard dismissal on mobile", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  try {
+    const page = await context.newPage();
+    await openPlanner(page);
+    await page.getByRole("button", { name: "جلسه", exact: true }).tap();
+    const editor = page.getByRole("dialog", { name: "رویداد جدید" });
+    await editor.getByLabel("عنوان", { exact: true }).fill("زمان سفارشی");
+    const start = editor.getByRole("button", { name: "انتخاب ساعت شروع", exact: true });
+    const end = editor.getByRole("button", { name: "انتخاب ساعت پایان", exact: true });
+    await start.tap();
+    const startPicker = page.getByRole("dialog", { name: "انتخاب ساعت شروع", exact: true });
+    await startPicker.getByRole("radio", { name: "۱۰", exact: true }).tap();
+    await startPicker.getByRole("button", { name: "۳۰", exact: true }).tap();
+    await expect(startPicker.getByLabel("زمان انتخاب‌شده")).toHaveText("۱۰:۳۰");
+    await startPicker.getByRole("button", { name: "انتخاب زمان" }).tap();
+    await expect(editor.getByLabel("ساعت شروع", { exact: true })).toHaveValue("۱۰:۳۰");
+
+    await end.tap();
+    const endPicker = page.getByRole("dialog", { name: "انتخاب ساعت پایان", exact: true });
+    await endPicker.getByRole("radio", { name: "۱۲", exact: true }).tap();
+    await page.keyboard.press("Escape");
+    await expect(endPicker).toHaveCount(0);
+    await expect(editor).toBeVisible();
+    await expect(end).toBeFocused();
+    await expect(editor.getByLabel("ساعت پایان", { exact: true })).toHaveValue("۱۰:۰۰");
+
+    await end.press("Enter");
+    const hour = endPicker.getByRole("radio", { name: "۱۰", exact: true });
+    await hour.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(endPicker.getByRole("radio", { name: "۱۱", exact: true })).toBeChecked();
+    const minutes = endPicker.getByLabel("دقیقهٔ دقیق");
+    await minutes.fill("۷۵");
+    await expect(endPicker.getByRole("button", { name: "انتخاب زمان" })).toBeDisabled();
+    await minutes.fill("۱۷");
+    await minutes.press("Enter");
+    await expect(editor.getByLabel("ساعت پایان", { exact: true })).toHaveValue("۱۱:۱۷");
+    await editor.getByRole("button", { name: "ذخیرهٔ رویداد" }).tap();
+    await expect(page.getByRole("button", { name: /زمان سفارشی/ })).toContainText("۱۰:۳۰");
+  } finally {
+    await context.close();
   }
 });

@@ -2,7 +2,7 @@
 
 import { cloneElement, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type HTMLAttributes, type ReactElement, type ReactNode } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, X } from "lucide-react";
-import { addDays, addMonths, dateInput, dateParts, fa, fullDay, localizedTime, monthLabel, monthStart, parseDateInput, todayIn, weekdays, weekBeginning } from "@/features/calendar/dates";
+import { addDays, addMonths, dateInput, dateParts, fa, fullDay, monthLabel, monthStart, parseDateInput, todayIn, weekdays, weekBeginning } from "@/features/calendar/dates";
 import type { Calendar } from "@/types/planner";
 
 export function Button({ variant = "secondary", className = "", type = "button", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "ghost" | "danger" }) {
@@ -13,7 +13,7 @@ export function IconButton({ label, children, ...props }: ButtonHTMLAttributes<H
   return <Button variant="ghost" aria-label={label} title={label} {...props} className={`icon-button ${props.className ?? ""}`}>{children}</Button>;
 }
 
-export function Dialog({ title, close, children }: { title: string; close: () => void; children: ReactNode }) {
+export function Dialog({ title, close, children, className }: { title: string; close: () => void; children: ReactNode; className?: string }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
   useEffect(() => {
@@ -23,12 +23,14 @@ export function Dialog({ title, close, children }: { title: string; close: () =>
     return () => {
       dialog?.close();
       queueMicrotask(() => {
-        if (previous instanceof HTMLElement && previous.isConnected && !document.querySelector("dialog[open]")) previous.focus();
+        const openDialogs = document.querySelectorAll("dialog[open]");
+        const top = openDialogs[openDialogs.length - 1];
+        if (previous instanceof HTMLElement && previous.isConnected && (!top || top.contains(previous))) previous.focus();
       });
     };
   }, []);
 
-  return <dialog ref={ref} aria-labelledby={id} onCancel={(event) => { event.preventDefault(); close(); }}
+  return <dialog ref={ref} className={className} aria-labelledby={id} onCancel={(event) => { event.preventDefault(); event.stopPropagation(); close(); }}
     onClick={(event) => { if (event.target === event.currentTarget) close(); }}>
     <section className="dialog-content">
       <header className="dialog-header"><h2 id={id}>{title}</h2><IconButton label="بستن" onClick={close}><X size={20} /></IconButton></header>
@@ -96,17 +98,6 @@ export function DateField({ label, date, calendar, name, required = false, weekS
         })}
       </div>
     </div>}
-  </div>;
-}
-
-export function TimeField({ label, time, name }: { label: string; time: string; name: string }) {
-  const presets = useId();
-  return <div className="time-field">
-    <Field label={label}><input name={name} list={presets} dir="ltr" inputMode="numeric" autoComplete="off" required placeholder="۰۹:۰۰" defaultValue={localizedTime(time)} /></Field>
-    <datalist id={presets}>{Array.from({ length: 48 }, (_, index) => {
-      const value = localizedTime(`${String(Math.floor(index / 2)).padStart(2, "0")}:${index % 2 ? "30" : "00"}`);
-      return <option key={value} value={value} />;
-    })}</datalist>
   </div>;
 }
 

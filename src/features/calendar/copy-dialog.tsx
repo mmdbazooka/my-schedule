@@ -1,5 +1,6 @@
 "use client";
 
+import { TimePicker } from "@/components/time-picker";
 import { Select } from "@/components/select";
 import { useMemo, useState } from "react";
 import { AlertTriangle, Copy } from "lucide-react";
@@ -74,8 +75,8 @@ export function CopyDialog({ data, from, revision, stale, close, save, saveError
               <Field label={`روز مقصد ${source.title}`}><Select value={row.date} onValueChange={(choice) => adjust(row.id, { date: choice })}>
                 {choices.map((date) => <option key={date} value={date}>{fullDay(date, calendar)}</option>)}
               </Select></Field>
-              {!source.timing.allDay && <Field label={`ساعت مقصد ${source.title}`}><input dir="ltr" inputMode="numeric" value={row.time}
-                onChange={(event) => adjust(row.id, { time: event.target.value })} /></Field>}
+              {!source.timing.allDay && <TimePicker label={`ساعت مقصد ${source.title}`} time={row.time}
+                onChange={(time) => adjust(row.id, { time })} />}
             </div>
             {draft && <p><strong>مقصد</strong> {fullDay(row.date, calendar)} · {eventTime(draft.timing, zone)}
               {length && !draft.timing.allDay && ` · ${duration((length.end - length.start) / minute)}`}</p>}

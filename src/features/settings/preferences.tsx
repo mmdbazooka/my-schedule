@@ -1,9 +1,10 @@
 "use client";
 
+import { TimePicker } from "@/components/time-picker";
 import { Select } from "@/components/select";
 import { useState } from "react";
 import { Clock3, Pencil, Plus, Trash2 } from "lucide-react";
-import { Button, Dialog, Field, IconButton, TimeField } from "@/components/ui";
+import { Button, Dialog, Field, IconButton } from "@/components/ui";
 import { localizedTime, normalizeTime, weekdays } from "@/features/calendar/dates";
 import type { PlannerData, TimePreference } from "@/types/planner";
 
@@ -51,8 +52,8 @@ export function Preferences({ data, revision, save, saveError }: {
           <Field label="روز ترجیح"><Select name="weekday" defaultValue={edit.rule?.weekday ?? data.settings.weekStart}>
             {days.map((day) => <option key={day} value={day}>{weekdays[day]}</option>)}
           </Select></Field>
-          <TimeField name="start" label="شروع ترجیح" time={edit.rule?.start ?? "09:00"} />
-          <TimeField name="end" label="پایان ترجیح" time={edit.rule?.end ?? "11:00"} />
+          <TimePicker name="start" label="شروع ترجیح" time={edit.rule?.start ?? "09:00"} />
+          <TimePicker name="end" label="پایان ترجیح" time={edit.rule?.end ?? "11:00"} />
         </div>
         {(error || saveError) && <p className="error" role="alert">{error || saveError}</p>}
         {edit.revision !== revision && <p className="error" role="alert">داده‌ها تغییر کرده‌اند. فرم را دوباره باز کن.</p>}

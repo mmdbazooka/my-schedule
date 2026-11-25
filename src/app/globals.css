@@ -204,7 +204,7 @@ button:disabled { opacity: .56; cursor: not-allowed; }
 .active-day > strong { padding-top: 7px; }
 .active-ranges { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 36px; }
 .active-range { display: flex; align-items: center; gap: 4px; }
-.active-range input { width: 70px; }
+.active-range .time-control { width: 90px; }
 .category-list { display: flex; gap: 7px; flex-wrap: wrap; }
 .category-list label { display: inline-flex; align-items: center; gap: 6px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
 .category-add { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
@@ -316,7 +316,7 @@ legend svg { display: inline-block; vertical-align: middle; }
   .active-day { grid-template-columns: 58px 1fr auto; gap: 4px; }
   .active-day > .button { padding-inline: 4px; }
   .active-range { gap: 2px; }
-  .active-range input { width: 50px; padding-inline: 3px; }
+  .active-range .time-control { width: 78px; }
 }
 
 .date-field { position: relative; }
@@ -374,3 +374,84 @@ legend svg { display: inline-block; vertical-align: middle; }
 .settings-page + .settings-card { margin-top:13px; }
 
 .event-editor > .dialog-actions { position:sticky; bottom:0; z-index:3; background:var(--panel); padding:8px 0; border-top:1px solid var(--line); }
+
+.time-control {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--soft);
+}
+.time-control:focus-within { border-color: var(--purple-text); }
+.time-control input:not([type="checkbox"]) {
+  border: 0;
+  background: transparent;
+  min-height: 40px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.time-control button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+  border-inline-start: 1px solid var(--line-strong);
+  border-start-end-radius: 9px;
+  border-end-end-radius: 9px;
+  color: var(--purple-text);
+}
+.time-control button:hover, .time-control button[aria-expanded="true"] { background: var(--selection); }
+.active-range .time-control input { padding-inline: 3px; }
+.active-range .time-control button { flex-basis: 32px; }
+.clock-dialog { width: min(426px, calc(100vw - 24px)); }
+.clock-panel { display: grid; gap: 12px; }
+.clock-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  padding: 8px;
+  background: var(--selection);
+  color: var(--purple-text);
+}
+.clock-preview output { font-size: 32px; font-weight: 850; font-variant-numeric: tabular-nums; }
+.clock-preview span { font-size: 11px; }
+.clock-hours { padding-inline: 0; border: 0; }
+.clock-hours legend { padding: 0; }
+.clock-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
+.clock-hour { display: grid; position: relative; min-width: 0; cursor: pointer; }
+.clock-hour input { position: absolute; opacity: 0; inset: 0; height: 100%; margin: 0; cursor: pointer; }
+.clock-hour span, .clock-minute, .clock-end {
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--soft);
+  font-size: 13px;
+  font-weight: 700;
+}
+.clock-hour:hover span, .clock-minute:hover:not(:disabled), .clock-end:hover { border-color: var(--purple-text); }
+.clock-hour input:focus-visible + span { outline: 2px solid var(--purple-text); outline-offset: 1px; }
+.clock-hour input:checked + span { border-color: var(--primary); color: white; background: var(--primary); }
+.clock-minute[aria-pressed="true"], .clock-end[aria-pressed="true"] {
+  border-color: var(--purple-text);
+  background: var(--selection);
+  color: var(--purple-text);
+}
+.clock-minute-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 750;
+}
+.clock-minute-field input:not([type="checkbox"]) { width: 56px; text-align: center; }
+.clock-minute-field input[aria-invalid="true"] { border-color: var(--danger-text); }
+.clock-panel .dialog-actions { margin-top: 0; }
+@media (pointer: coarse) {
+  .time-control input:not([type="checkbox"]), .clock-minute-field input:not([type="checkbox"]) { font-size: 16px; }
+  .clock-hour span, .clock-minute, .clock-end { min-height: 40px; }
+}

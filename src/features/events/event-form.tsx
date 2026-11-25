@@ -1,9 +1,10 @@
 "use client";
 
+import { TimePicker } from "@/components/time-picker";
 import { Select } from "@/components/select";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AlertTriangle, Paperclip, Plus, Save, Trash2 } from "lucide-react";
-import { Button, Check, DateField, Field, TimeField } from "@/components/ui";
+import { Button, Check, DateField, Field } from "@/components/ui";
 import { addDays, atTime, clockLabel, epoch, eventTime, fullDay, instantISO, latin, localTime, minute, normalizeTime, parseDateInput, timingInterval, todayIn, weekday, weekdays } from "@/features/calendar/dates";
 import { conflicts } from "@/features/availability/availability";
 import { eventFieldsSchema } from "@/features/backup/schema";
@@ -201,7 +202,7 @@ export function EventForm({ data, draft, cancel, stale, save }: {
     <div className="form-grid">
       <DateField label="تاریخ شروع" date={startDate} calendar={calendar} weekStart={weekStart} onPick={() => setWarning(null)} name="startDate" required />
       <DateField label={allDay ? "آخرین روز رویداد" : "تاریخ پایان"} date={endDate} calendar={calendar} weekStart={weekStart} onPick={() => setWarning(null)} name="endDate" required />
-      {!allDay && <><TimeField label="ساعت شروع" name="startTime" time={startTime} /><TimeField label="ساعت پایان" name="endTime" time={endTime} /></>}
+      {!allDay && <><TimePicker label="ساعت شروع" name="startTime" time={startTime} /><TimePicker label="ساعت پایان" name="endTime" time={endTime} /></>}
     </div>
     {!allDay && <small className="muted">منطقهٔ زمانی رویداد <bdi>{editZone}</bdi></small>}
     {!draft.occurrence && !linkedTask && <>

@@ -1,5 +1,6 @@
 "use client";
 
+import { TimePicker } from "@/components/time-picker";
 import { Select } from "@/components/select";
 import { useRef, useState } from "react";
 import { Clock3, Download, HardDrive, Palette, Plus, Settings2, Target, Trash2, Upload } from "lucide-react";
@@ -7,7 +8,7 @@ import { Button, Dialog, Field, IconButton } from "@/components/ui";
 import { decodeBackup, encodeBackup } from "@/features/backup/schema";
 import { settingsSchema } from "@/features/backup/schema";
 import { GoalFields, readGoal } from "@/features/goals/goal-fields";
-import { duration, fa, latin, localizedTime, normalizeTime, todayIn, weekdays } from "@/features/calendar/dates";
+import { duration, fa, latin, normalizeTime, todayIn, weekdays } from "@/features/calendar/dates";
 import type { Category, PlannerData, Settings as Preferences } from "@/types/planner";
 
 function saveFile(contents: Blob, name: string) {
@@ -137,9 +138,10 @@ export function SettingsForm({ current, revision, save }: {
       <div className="active-week">{weekdays.map((_, index) => (index + current.weekStart) % 7).map((index) =>
         <div className="active-day" key={index}><strong>{weekdays[index]}</strong><div className="active-ranges">
           {settings.active[index].map((range, rangeIndex) => <div className="active-range" key={rangeIndex}>
-            {(["start", "end"] as const).map((key) => <input key={key} dir="ltr" inputMode="numeric" aria-label={`${weekdays[index]}، ${key === "start" ? "شروع" : "پایان"} بازهٔ ${fa(rangeIndex + 1)}`}
-              value={localizedTime(range[key])} onChange={(event) => updateDay(index, settings.active[index].map((item, position) =>
-                position === rangeIndex ? { ...item, [key]: latin(event.target.value) } : item))} />)}
+            {(["start", "end"] as const).map((key) => <TimePicker key={key} compact endOfDay={key === "end"}
+              label={`${weekdays[index]}، ${key === "start" ? "شروع" : "پایان"} بازهٔ ${fa(rangeIndex + 1)}`}
+              time={range[key]} onChange={(time) => updateDay(index, settings.active[index].map((item, position) =>
+                position === rangeIndex ? { ...item, [key]: latin(time) } : item))} />)}
             <IconButton label={`حذف بازهٔ ${weekdays[index]}`} onClick={() => updateDay(index, settings.active[index].filter((_, position) => position !== rangeIndex))}><Trash2 size={16} /></IconButton>
           </div>)}
           {!settings.active[index].length && <span className="muted">غیرفعال</span>}
