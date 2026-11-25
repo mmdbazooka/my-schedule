@@ -281,3 +281,30 @@ test("display name survives refresh and settings controls align on desktop and m
   await page.setViewportSize({ width: 1280, height: 860 });
   await expect(page.locator(".profile strong")).toHaveText("آوا");
 });
+
+test("bottom navigation fits in two balanced rows through 660px", async ({ page }) => {
+  await openPlanner(page);
+  const navigation = page.getByRole("navigation", { name: "ناوبری اصلی" });
+  await page.evaluate(() => document.fonts.ready);
+  for (const width of [430, 431, 545, 620, 660, 661]) {
+    await page.setViewportSize({ width, height: 844 });
+    const layout = await navigation.evaluate((element) => {
+      const rows = new Map<number, number>();
+      for (const button of element.querySelectorAll("button")) {
+        const top = button.getBoundingClientRect().top;
+        rows.set(top, (rows.get(top) ?? 0) + 1);
+      }
+      const barHeight = element.parentElement!.getBoundingClientRect().height;
+      const contentBottom = parseFloat(getComputedStyle(document.querySelector("main")!).paddingBottom);
+      return { rows: [...rows.values()], scrollWidth: document.documentElement.scrollWidth, barHeight, contentBottom };
+    });
+    expect(layout.rows).toEqual(width <= 660 ? [4, 4] : [8]);
+    expect(layout.scrollWidth).toBe(width);
+    expect(layout.contentBottom).toBeGreaterThan(layout.barHeight);
+  }
+
+  await page.setViewportSize({ width: 545, height: 844 });
+  await navigation.getByRole("button", { name: "تبدیل ساعت" }).click();
+  await expect(page.getByRole("heading", { name: "تبدیل ساعت" })).toBeVisible();
+  await expect(navigation.getByRole("button", { name: "تبدیل ساعت" })).toHaveAttribute("aria-current", "page");
+});

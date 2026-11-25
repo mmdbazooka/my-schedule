@@ -287,6 +287,12 @@ legend svg { display: inline-block; vertical-align: middle; }
   .content { padding-bottom: 77px; }
   .toast { bottom: 67px; }
 }
+@media (max-width: 660px) {
+  .sidebar nav { grid-template-columns: repeat(4, minmax(0,1fr)); }
+  .sidebar nav button { font-size: 11px; }
+  .content { padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
+  .toast { bottom: calc(115px + env(safe-area-inset-bottom)); }
+}
 @media (max-width: 570px) {
   .content { padding-inline: 13px; padding-top: 17px; }
   .topbar { padding-inline: 13px; }
@@ -492,9 +498,4 @@ legend svg { display: inline-block; vertical-align: middle; }
 @media (max-width: 620px) {
   .converter-top { grid-template-columns: minmax(0,1fr); }
   .converter-destinations { grid-template-columns: repeat(2, minmax(0,1fr)); }
-}
-@media (max-width: 430px) {
-  .sidebar nav { grid-template-columns: repeat(4, minmax(0,1fr)); }
-  .content { padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
-  .toast { bottom: calc(115px + env(safe-area-inset-bottom)); }
 }
