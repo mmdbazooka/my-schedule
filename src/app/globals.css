@@ -279,7 +279,7 @@ legend svg { display: inline-block; vertical-align: middle; }
   .crumb { gap: 7px; }
   .sidebar { z-index: 10; position: fixed; inset: auto 0 0 0; height: auto; border: 0; border-top: 1px solid var(--line-strong); padding: 4px 8px max(4px, env(safe-area-inset-bottom)); }
   .sidebar .brand, .sidebar-bottom, .sidebar nav p { display: none; }
-  .sidebar nav { margin-top: 0; display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); }
+  .sidebar nav { margin-top: 0; display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); }
   .sidebar nav button { min-height: 49px; display: grid; justify-items: center; align-content: center; text-align: center; gap: 2px; padding: 4px 1px; font-size: 10px; }
   .sidebar nav button[aria-current="page"]::before { display: none; }
   .content { padding-bottom: 77px; }
@@ -363,7 +363,6 @@ legend svg { display: inline-block; vertical-align: middle; }
 .review-row span { color:var(--muted); font-size:13px; }
 .review-row progress { width:100%; height:8px; }
 .header-tools { display:flex; align-items:center; gap:6px; }
-@media (max-width:850px) { .sidebar nav { grid-template-columns:repeat(6,minmax(0,1fr)); } }
 @media (max-width:570px) { .header-tools .top-clock { display:none; } .crumb-divider,.crumb strong {display:none;} }
 
 .light-switch { display:none; }
@@ -457,3 +456,14 @@ legend svg { display: inline-block; vertical-align: middle; }
   .time-control input:not([type="checkbox"]), .clock-minute-field input:not([type="checkbox"]) { font-size: 16px; }
   .clock-hour span, .clock-minute, .clock-end { min-height: 40px; }
 }
+
+.notes-search { margin-bottom: 14px; max-width: 400px; }
+.notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 235px), 1fr)); gap: 12px; }
+.note-card { display: grid; grid-template-rows: auto 1fr auto; gap: 10px; min-width: 0; text-align: start; }
+.note-card:hover { border-color: var(--purple-text); }
+.note-card-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.note-card-title strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-card-title svg { flex-shrink: 0; color: var(--purple-text); }
+.note-preview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); font-size: 13px; }
+.note-card time { color: var(--muted); font-size: 11px; }
+.note-editor textarea { min-height: 180px; max-height: 62dvh; line-height: 1.8; }

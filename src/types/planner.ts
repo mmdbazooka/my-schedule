@@ -75,6 +75,13 @@ export interface Task {
   done: boolean;
 }
 
+export interface Note {
+  id: string;
+  title: string;
+  body: string;
+  updatedAt: string;
+}
+
 export interface ActiveHours {
   start: string;
   end: string;
@@ -97,6 +104,7 @@ export interface PlannerData {
   preferences: TimePreference[];
   events: PlannerEvent[];
   tasks: Task[];
+  notes: Note[];
   settings: Settings;
 }
 

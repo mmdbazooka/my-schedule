@@ -67,18 +67,27 @@ export const settingsSchema = z.object({
   active: z.array(z.array(hours).max(24)).length(7),
 });
 
+export const noteBodyLimit = 20_000;
+const note = z.object({
+  id,
+  title: z.string().trim().max(160),
+  body: z.string().trim().min(1).max(noteBodyLimit),
+  updatedAt: instant,
+});
+
 const dataSchema = z.object({
   categories: z.array(z.object({ id, name: title.max(40), color, weeklyMinutes })).min(1).max(200),
   lessons: z.array(z.object({ id, name: title.max(80), weeklyMinutes })).max(500),
   preferences: z.array(hours.safeExtend({ id, categoryId: id, weekday: weekdayNumber })).max(500),
   events: z.array(event).max(10000),
   tasks: z.array(task).max(10000),
+  notes: z.array(note).max(10000),
   settings: settingsSchema,
 });
 const envelope = z.object({ version: z.number().int(), exportedAt: z.iso.datetime({ offset: true }), data: z.unknown() });
 const unique = (values: string[]) => new Set(values).size === values.length;
 
-export const version = 3;
+export const version = 4;
 
 export function validateData(input: unknown): PlannerData {
   const parsed = dataSchema.safeParse(input);
@@ -89,7 +98,7 @@ export function validateData(input: unknown): PlannerData {
   const eventsById = new Map(data.events.map((entry) => [entry.id, entry]));
   if (categoryIds.size !== data.categories.length || eventsById.size !== data.events.length ||
     lessonIds.size !== data.lessons.length || !unique(data.preferences.map((entry) => entry.id)) ||
-    !unique(data.tasks.map((entry) => entry.id))) throw new Error("فایل دارای شناسهٔ تکراری است.");
+    !unique(data.tasks.map((entry) => entry.id)) || !unique(data.notes.map((entry) => entry.id))) throw new Error("فایل دارای شناسهٔ تکراری است.");
   const lessonExists = (value: string | null) => value === null || lessonIds.has(value);
   if (data.preferences.some((entry) => !categoryIds.has(entry.categoryId)) ||
     data.tasks.some((entry) => !lessonExists(entry.lessonId) || (entry.categoryId !== null && !categoryIds.has(entry.categoryId)))) {
@@ -181,13 +190,18 @@ export function decodeBackup(raw: string) {
   if (!parsed.success) throw new Error("سربرگ یا تاریخ فایل پشتیبان معتبر نیست.");
   const file = parsed.data;
   if (file.version > version) throw new Error("نسخهٔ بکاپ جدیدتر از نسخهٔ برنامه است.");
-  if (file.version !== 1 && file.version !== 2 && file.version !== version) throw new Error("این نسخهٔ بکاپ پشتیبانی نمی‌شود.");
+  if (file.version < 1) throw new Error("این نسخهٔ بکاپ پشتیبانی نمی‌شود.");
   let data = file.data;
   if (file.version === 1) {
     try { data = migrateV1(data); } catch { throw new Error("تبدیل ساختار بکاپ نسخهٔ ۱ ممکن نبود."); }
   }
   if (file.version === 1 || file.version === 2) {
     try { data = migrateV2(data); } catch { throw new Error("تبدیل ساختار بکاپ قدیمی ممکن نبود."); }
+  }
+  if (file.version < 4) {
+    const previous = z.record(z.string(), z.unknown()).safeParse(data);
+    if (!previous.success) throw new Error("تبدیل ساختار بکاپ قدیمی ممکن نبود.");
+    data = { ...previous.data, notes: [] };
   }
   return { exportedAt: file.exportedAt, data: validateData(data) };
 }

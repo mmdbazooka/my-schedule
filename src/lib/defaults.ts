@@ -21,6 +21,7 @@ export function defaults(): PlannerData {
     preferences: [],
     events: [],
     tasks: [],
+    notes: [],
     settings: {
       calendar: "persian", zone: "Asia/Tehran", weekStart: 6, theme: "system",
       active: Array.from({ length: 7 }, () => [{ start: "08:00", end: "22:00" }]),

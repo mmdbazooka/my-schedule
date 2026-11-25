@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, BarChart3, Moon, Sun, Plus, BookOpen, CalendarDays, CalendarRange, CheckCircle2, ClipboardList, Clock3, LayoutDashboard, LoaderCircle, Settings2, UserRound, X } from "lucide-react";
+import { AlertTriangle, BarChart3, Moon, Sun, Plus, BookOpen, CalendarDays, CalendarRange, CheckCircle2, ClipboardList, Clock3, LayoutDashboard, LoaderCircle, Settings2, StickyNote, UserRound, X } from "lucide-react";
 import { Capture } from "./capture";
+import { Notes } from "@/features/notes/notes";
 import { Review } from "@/features/review/review";
 import { DeviceSync } from "@/features/sync/device-sync";
 import { Button, Dialog, IconButton } from "@/components/ui";
@@ -27,6 +28,7 @@ const navigation = [
   { key: "calendar", label: "تقویم", icon: CalendarDays },
   { key: "lessons", label: "درس‌ها", icon: BookOpen },
   { key: "tasks", label: "کارهای بدون زمان", icon: ClipboardList },
+  { key: "notes", label: "یادداشت‌ها", icon: StickyNote },
   { key: "review", label: "مرور هفتگی", icon: BarChart3 },
   { key: "settings", label: "تنظیمات", icon: Settings2 },
 ] as const;
@@ -247,6 +249,9 @@ export function Planner() {
           {route === "dashboard" && <Dashboard data={data} now={now} day={date} select={setSelected} create={create} open={open} revision={store.revision}
             saveError={notice?.error ? notice.text : undefined} reschedule={(pending, revision) => commit(pending, "زمان‌بندی به‌روز شد.", revision)}
             calendarPage={() => navigate("calendar")} sample={() => commit(sampleData(data, today), "برنامهٔ ساختگی بارگذاری شد.")} />}
+          {route === "notes" && <Notes notes={data.notes} settings={data.settings} revision={store.revision}
+            saveError={notice?.error ? notice.text : undefined}
+            save={(notes, message, revision) => commit({ ...data, notes }, message, revision)} />}
           {route === "review" && <Review data={data} now={now} open={open} />}
           {route === "calendar" && <CalendarView data={data} date={date} select={setSelected} now={now} create={create} open={open}
             revision={store.revision} saveError={notice?.error ? notice.text : undefined}

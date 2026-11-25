@@ -61,7 +61,7 @@ export function BackupPanel({ data, corruptRaw, revision, restore, clear, saveEr
     {preview && <Dialog title="بازیابی نسخهٔ پشتیبان" close={() => setPreview(null)}>
       <div className="form">
         <p>تاریخ خروجی {new Intl.DateTimeFormat("fa-IR", { calendar: data?.settings.calendar ?? "persian", dateStyle: "medium", timeStyle: "short", timeZone: data?.settings.zone ?? "Asia/Tehran" }).format(new Date(preview.exportedAt))}</p>
-        <p><strong>{fa(preview.data.events.length)} رویداد، {fa(preview.data.categories.length)} دسته و {fa(preview.data.tasks.length)} کار</strong>{preview.data.lessons.length > 0 && <span> · {fa(preview.data.lessons.length)} درس</span>}</p>
+        <p><strong>{fa(preview.data.events.length)} رویداد، {fa(preview.data.categories.length)} دسته و {fa(preview.data.tasks.length)} کار</strong>{preview.data.notes.length > 0 && <span> · {fa(preview.data.notes.length)} یادداشت</span>}{preview.data.lessons.length > 0 && <span> · {fa(preview.data.lessons.length)} درس</span>}</p>
         <p className="warning">با تأیید، داده‌های فعلی این مرورگر با محتوای بکاپ جایگزین می‌شوند.</p>
         {saveError && <p className="error" role="alert">{saveError}</p>}
         {preview.revision !== revision && <p className="error" role="alert">داده‌ها در تب دیگری تغییر کرده‌اند. فایل را دوباره انتخاب کنید.</p>}
@@ -75,7 +75,7 @@ export function BackupPanel({ data, corruptRaw, revision, restore, clear, saveEr
       </div>
     </Dialog>}
     {erase !== null && <Dialog title="حذف همهٔ داده‌ها" close={() => setErase(null)}>
-      <p>رویدادها، دسته‌ها، کارها، پیوست‌ها و تنظیمات برنامه از این مرورگر پاک می‌شوند.</p>
+      <p>رویدادها، دسته‌ها، کارها، یادداشت‌ها، پیوست‌ها و تنظیمات برنامه از این مرورگر پاک می‌شوند.</p>
       {saveError && <p className="error" role="alert">{saveError}</p>}
       {erase !== revision && <p className="error" role="alert">داده‌ها در تب دیگری تغییر کرده‌اند. دوباره تأیید را باز کنید.</p>}
       <div className="dialog-actions">

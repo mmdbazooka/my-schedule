@@ -31,6 +31,10 @@ test("two isolated devices exchange encrypted snapshots and retain competing off
   await github(context);
   await page.goto("/");
   await capture(page,"کار آزمایشی مبدأ");
+  await go(page,"یادداشت‌ها");
+  await page.getByRole("button",{name:"یادداشت جدید"}).click();
+  await dialog(page).getByLabel("متن یادداشت").fill("این متن فقط برای همگام‌سازی آزمایشی است.");
+  await dialog(page).getByRole("button",{name:"ذخیرهٔ یادداشت"}).click();
   await page.getByRole("button",{name:"تغییر تم روشن و تاریک"}).click();
   await expect(page.locator(".app-shell")).toHaveAttribute("data-theme",/light|dark/);
   await go(page,"تنظیمات");
@@ -52,6 +56,8 @@ test("two isolated devices exchange encrypted snapshots and retain competing off
     await dialog(phone).getByLabel("توکن دستگاه").fill("second-test-token");
     await dialog(phone).getByRole("button",{name:"مشاهدهٔ نسخهٔ دستگاه"}).click();
     await dialog(phone).getByRole("button",{name:"جایگزینی داده‌های این دستگاه"}).click();
+    await go(phone,"یادداشت‌ها");
+    await expect(phone.getByRole("button",{name:/این متن فقط برای همگام‌سازی آزمایشی است/})).toBeVisible();
     await go(phone,"کارهای بدون زمان");
     await expect(phone.getByText("کار آزمایشی مبدأ",{exact:true})).toBeVisible();
     const old = sha;
