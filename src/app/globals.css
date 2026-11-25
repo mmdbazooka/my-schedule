@@ -155,7 +155,8 @@ button:disabled { opacity: .56; cursor: not-allowed; }
 .calendar-filters { justify-content: start; padding-block: 10px; flex-wrap: wrap; }
 .calendar-filters select { width: auto; }
 .search { display: flex; min-width: 140px; max-width: 340px; flex: 1; align-items: center; gap: 6px; padding-inline: 9px; background: var(--soft); border: 1px solid var(--line-strong); border-radius: 9px; color: var(--muted); }
-.search input { border: 0; padding-inline: 2px; background: transparent; }
+.search > svg { flex-shrink: 0; }
+.search:focus-within { outline: 3px solid #9875fc; outline-offset: 3px; }
 .month-wrap { overflow: auto; }
 .month-grid { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); border-top: 1px solid var(--line); min-width: 525px; }
 .month-weekday { padding: 8px 5px; text-align: center; color: var(--muted); font-size: 12px; background: var(--soft); border-bottom: 1px solid var(--line); }
@@ -238,6 +239,7 @@ dialog::backdrop { background: #15102072; backdrop-filter: blur(2px); }
 .field > label, legend { font-size: 13px; font-weight: 750; }
 .field small { color: var(--muted); font-size: 11px; }
 input:not([type="checkbox"]), select, textarea { width: 100%; min-height: 36px; min-width: 0; border: 1px solid var(--line-strong); background: var(--soft); color: var(--ink); border-radius: 8px; padding: 6px 8px; font-size: 13px; }
+.search > input { border: 0; padding-inline: 2px; background: transparent; outline: none; }
 input[type="color"] { width: 39px; }
 .category-list input[type="color"] { width: 27px; min-height: 24px; padding: 2px; }
 input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--primary); }

@@ -28,6 +28,10 @@ test("legacy data migrates and notes can be searched, edited, backed up and dele
   const card = page.getByRole("button", { name: /ایده‌ها/ });
   await expect(card).toContainText("سؤال‌های هفته");
   const search = page.getByRole("searchbox", { name: "جست‌وجوی یادداشت‌ها" });
+  await search.focus();
+  await expect(search).toHaveCSS("border-top-width", "0px");
+  await expect(search).toHaveCSS("outline-style", "none");
+  await expect(page.locator(".notes-search")).toHaveCSS("outline-style", "solid");
   await search.fill("کارگاه");
   await expect(card).toBeVisible();
   await search.fill("عبارت ناموجود");
