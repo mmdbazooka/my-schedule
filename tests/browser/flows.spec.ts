@@ -308,3 +308,39 @@ test("bottom navigation fits in two balanced rows through 660px", async ({ page 
   await expect(page.getByRole("heading", { name: "تبدیل ساعت" })).toBeVisible();
   await expect(navigation.getByRole("button", { name: "تبدیل ساعت" })).toHaveAttribute("aria-current", "page");
 });
+
+test("unscheduled tasks show more slots and can browse past the first week up to the deadline", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const data = defaults();
+  data.settings.active = data.settings.active.map(() => [
+    { start: "09:00", end: "10:00" },
+    { start: "12:00", end: "13:00" },
+    { start: "16:00", end: "17:00" },
+  ]);
+  const due = addDays(day, 15);
+  data.tasks = [{ id: "later-task", title: "آماده‌سازی ارائه", minutes: 30, priority: "medium", due,
+    eventId: null, categoryId: null, lessonId: null, done: false }];
+  await page.addInitScript(({ key, raw }) => localStorage.setItem(key, raw), { key: storageKey, raw: encodeBackup(data) });
+  await openPlanner(page);
+  await nav(page, "کارهای بدون زمان").click();
+  await page.getByRole("button", { name: "پیشنهاد زمان", exact: true }).click();
+
+  const modal = dialog(page);
+  const more = modal.getByRole("button", { name: "نمایش زمان‌های بیشتر در همین بازه" });
+  const next = modal.getByRole("button", { name: "هفت روز بعد", exact: true });
+  const previous = modal.getByRole("button", { name: "هفت روز قبل", exact: true });
+  const times = modal.getByRole("button", { name: /·.*تا/ });
+  await expect(times).toHaveCount(10);
+  await expect(previous).toBeDisabled();
+  await more.click();
+  await expect(times).toHaveCount(20);
+  await next.click();
+  await expect(times.first()).toContainText(fullDay(addDays(day, 7), "persian"));
+  await next.click();
+  await expect(next).toBeDisabled();
+  await expect(times).toHaveCount(6);
+  const dueSlot = times.filter({ hasText: fullDay(due, "persian") }).first();
+  await expect(dueSlot).toBeVisible();
+  await dueSlot.click();
+  await expect(dialog(page).getByLabel("تاریخ شروع", { exact: true })).toHaveValue(dateInput(due, "persian"));
+});

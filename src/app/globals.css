@@ -356,6 +356,9 @@ legend svg { display: inline-block; vertical-align: middle; }
   .lesson-grid { grid-template-columns: 1fr; }
 }
 
+.suggestion-pagination { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--soft); }
+.suggestion-pagination p { text-align: center; font-weight: 700; }
+.suggestion-pagination .button { padding-inline: 4px; gap: 3px; color: var(--purple-text); font-size: 11px; }
 .suggest-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .suggest-controls .field { flex: 0 1 190px; }
 @media (max-width: 460px) {

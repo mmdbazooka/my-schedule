@@ -1,14 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, CheckCircle2, ClipboardList, Clock3, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { Button, Dialog, Empty, IconButton } from "@/components/ui";
 import { suggestions } from "@/features/availability/availability";
-import { clockLabel, duration, fullDay, todayIn } from "@/features/calendar/dates";
+import { addDays, clockLabel, day, duration, fullDay, todayIn } from "@/features/calendar/dates";
 import { TaskForm } from "./task-form";
 import type { EventDraft } from "@/features/events/event-form";
 import { priorityLabels } from "@/lib/defaults";
 import type { PlannerData, Task } from "@/types/planner";
+
+const suggestionBatch = 10;
+const daysPerPage = 7;
 
 export function Tasks({ data, now, create, save, saveTask, unschedule, revision, saveError }: {
   data: PlannerData; now: number; create: (draft: EventDraft) => void;
@@ -18,11 +21,24 @@ export function Tasks({ data, now, create, save, saveTask, unschedule, revision,
   save: (tasks: Task[], message: string) => boolean; revision: number;
 }) {
   const [edit, setEdit] = useState<{ task: Task | null; revision: number } | null>(null);
-  const [suggest, setSuggest] = useState<string | null>(null);
+  const [suggest, setSuggest] = useState<{ id: string; page: number; limit: number } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const { zone, calendar } = data.settings;
-  const chosen = data.tasks.find((task) => task.id === suggest && !task.eventId && !task.done);
-  const slots = chosen ? suggestions(data, chosen, now) : [];
+  const chosen = data.tasks.find((task) => task.id === suggest?.id && !task.eventId && !task.done);
+  const today = todayIn(now, zone);
+  const horizon = chosen?.due ? addDays(chosen.due, 1) : addDays(today, 30);
+  const totalDays = day(today).until(day(horizon)).days;
+  const lastPage = Math.max(0, Math.ceil(totalDays / daysPerPage) - 1);
+  const page = Math.min(suggest?.page ?? 0, lastPage);
+  const limit = suggest?.limit ?? suggestionBatch;
+  const from = addDays(today, page * daysPerPage);
+  const pageEnd = addDays(from, daysPerPage);
+  const to = pageEnd < horizon ? pageEnd : horizon;
+  const slots = chosen && from < to ? suggestions(data, chosen, now, { from, to, limit: limit + 1 }) : [];
+
+  function changePage(offset: number) {
+    setSuggest((current) => current && { ...current, page: page + offset, limit: suggestionBatch });
+  }
 
   const hasPreferences = data.preferences.some((entry) => entry.categoryId === chosen?.categoryId);
   return <>
@@ -36,7 +52,7 @@ export function Tasks({ data, now, create, save, saveTask, unschedule, revision,
         <div className="task-actions">
           {task.done && <span className="state-tag"><CheckCircle2 size={16} /> انجام‌شده</span>}
           {task.eventId ? <><span className="state-tag"><CheckCircle2 size={16} /> زمان‌بندی شده</span><Button onClick={() => unschedule(task)}>لغو زمان‌بندی</Button></>
-            : !task.done && <Button onClick={() => setSuggest(task.id)}><Sparkles size={17} /> پیشنهاد زمان</Button>}
+            : !task.done && <Button onClick={() => setSuggest({ id: task.id, page: 0, limit: suggestionBatch })}><Sparkles size={17} /> پیشنهاد زمان</Button>}
           <IconButton label="ویرایش کار" onClick={() => { setEdit({ task, revision }); }}><Pencil size={17} /></IconButton>
           <IconButton label="حذف کار" onClick={() => setDeleteId(task.id)}><Trash2 size={17} /></IconButton>
         </div>
@@ -46,10 +62,21 @@ export function Tasks({ data, now, create, save, saveTask, unschedule, revision,
       save={(task) => saveTask(task, edit.revision)} saveError={saveError} />}
     {chosen && <Dialog title={`زمان پیشنهادی برای «${chosen.title}»`} close={() => setSuggest(null)}>
       <div className="form"><p className="muted">{duration(chosen.minutes)}{data.settings.buffer > 0 && ` · با ${duration(data.settings.buffer)} حاشیهٔ استراحت`}{!chosen.due && " · جست‌وجو در ۳۰ روز آینده"}</p>
-        {slots.length ? slots.map((slot) => <Button key={slot.start} onClick={() => {
+        {from < to && <div className="suggestion-pagination">
+          <Button variant="ghost" disabled={page === 0} onClick={() => changePage(-1)}><ChevronRight size={15} /> هفت روز قبل</Button>
+          <p aria-live="polite">{fullDay(from, calendar)}{addDays(to, -1) !== from && ` تا ${fullDay(addDays(to, -1), calendar)}`}</p>
+          <Button variant="ghost" disabled={to >= horizon} onClick={() => changePage(1)}>هفت روز بعد <ChevronLeft size={15} /></Button>
+        </div>}
+        {slots.length ? slots.slice(0, limit).map((slot) => <Button key={slot.start} onClick={() => {
           setSuggest(null); create({ date: todayIn(slot.start, zone), slot, taskId: chosen.id, categoryId: chosen.categoryId ?? undefined });
         }}><CalendarDays size={16} /> {fullDay(todayIn(slot.start, zone), calendar)} · {clockLabel(slot.start, zone)} تا {clockLabel(slot.end, zone)}{hasPreferences && ` · ${slot.preferred ? "مطابق ترجیح" : "آزاد خارج از ترجیح"}`}</Button>)
-          : <Empty icon={<Clock3 />} title="بازهٔ مناسبی پیدا نشد"><p>{chosen.due ? "تا پایان مهلت بازهٔ کافی پیدا نشد." : "ساعات فعال یا مدت کار را بررسی کن."}</p></Empty>}
+          : <Empty icon={<Clock3 />} title="بازهٔ مناسبی پیدا نشد">
+            <p>{to < horizon ? "برای دیدن روزهای بعد از دکمهٔ «هفت روز بعد» استفاده کن."
+              : chosen.due ? "در این بازه تا پایان مهلت وقت کافی پیدا نشد." : "در این بازه وقت کافی پیدا نشد."}</p>
+          </Empty>}
+        {slots.length > limit && <Button variant="ghost" onClick={() => {
+          setSuggest((current) => current && { ...current, limit: current.limit + suggestionBatch });
+        }}>نمایش زمان‌های بیشتر در همین بازه</Button>}
       </div>
     </Dialog>}
     {deleteId && <Dialog title="حذف کار" close={() => setDeleteId(null)}>
