@@ -1,7 +1,6 @@
 import { decodeBackup, encodeBackup, validateData } from "@/features/backup/schema";
 import type { PlannerData } from "@/types/planner";
 
-export const linkKey = "mohammad-planner:device";
 export interface Pair { repo: string; id: string; key: string }
 export interface Binding extends Pair { token: string; sha: string; hash: string }
 

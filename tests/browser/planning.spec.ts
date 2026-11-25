@@ -48,7 +48,7 @@ async function readPlanner(page: Page) {
 async function initialize(page: Page) {
   await page.clock.setFixedTime(fixedTime);
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /، محمد/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^(صبح بخیر|ظهر بخیر|عصر بخیر|شب‌بخیر)/ })).toBeVisible();
 }
 async function importBackup(page: Page, buffer: Buffer) {
   await nav(page, "تنظیمات").click();

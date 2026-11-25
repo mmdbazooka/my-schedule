@@ -21,7 +21,7 @@ function saveFile(contents: Blob, name: string) {
 }
 
 export function downloadBackup(data: PlannerData) {
-  const name = `mohammad-planner-${todayIn(Date.now(), data.settings.zone)}.json`;
+  const name = `planner-${todayIn(Date.now(), data.settings.zone)}.json`;
   saveFile(new Blob([encodeBackup(data)], { type: "application/json" }), name);
 }
 
@@ -43,7 +43,7 @@ export function BackupPanel({ data, corruptRaw, revision, restore, clear, saveEr
     <p>برای انتقال به دامنهٔ Vercel یا دستگاه دیگر، بکاپ بگیر و در مقصد بازیابی کن. فایل بکاپ می‌تواند شامل اطلاعات شخصی، لینک جلسات و پیوست‌ها باشد.</p>
     <div className="action-row">
       {data && <Button onClick={() => downloadBackup(data)}><Download size={17} /> دانلود بکاپ JSON</Button>}
-      {corruptRaw && <Button onClick={() => saveFile(new Blob([corruptRaw], { type: "text/plain" }), "mohammad-planner-recovery.txt")}><Download size={17} /> دریافت دادهٔ خام</Button>}
+      {corruptRaw && <Button onClick={() => saveFile(new Blob([corruptRaw], { type: "text/plain" }), "planner-recovery.txt")}><Download size={17} /> دریافت دادهٔ خام</Button>}
       <Button onClick={() => ref.current?.click()}><Upload size={17} /> بازیابی از فایل</Button>
       <input type="file" aria-label="فایل بکاپ JSON" ref={ref} hidden accept=".json,application/json" onChange={async (event) => {
         const file = event.currentTarget.files?.[0];
@@ -116,10 +116,10 @@ export function SettingsForm({ current, revision, save }: {
     <section className="panel padded settings-card">
       <div className="panel-heading"><span className="tile violet"><Settings2 size={20} /></span><div><h2>نمایش و تقویم</h2><p>زبان نمایش فارسی و ساعت‌ها ۲۴ساعته‌اند.</p></div></div>
       <div className="form-grid">
-        <Field label="نام نمایشی"><input value={settings.displayName ?? "محمد"} maxLength={50} onChange={(event) => change({ displayName: event.target.value })} /></Field>
+        <Field label="نام نمایشی"><input autoComplete="nickname" value={settings.displayName ?? ""} maxLength={50} onChange={(event) => change({ displayName: event.target.value })} /></Field>
         <Field label="تقویم"><Select value={settings.calendar} onValueChange={(choice) => change({ calendar: choice as Preferences["calendar"] })}>
           <option value="persian">شمسی</option><option value="gregory">میلادی</option></Select></Field>
-        <Field label="تم"><Select value={settings.theme} onValueChange={(choice) => change({ theme: choice as Preferences["theme"] })}>
+        <Field label="تم"><Select compact value={settings.theme} onValueChange={(choice) => change({ theme: choice as Preferences["theme"] })}>
           <option value="system">سیستم</option><option value="light">روشن</option><option value="dark">تاریک</option></Select></Field>
         <Field label="منطقهٔ زمانی" hint="نام IANA را انتخاب یا وارد کنید.">
           <input dir="ltr" list="time-zones" value={settings.zone} required onChange={(event) => change({ zone: event.target.value.trim() })} />

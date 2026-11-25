@@ -1,12 +1,35 @@
 import { decodeBackup, encodeBackup } from "@/features/backup/schema";
-import { linkKey } from "@/features/sync/vault";
 import { defaults } from "@/lib/defaults";
 import type { PlannerData } from "@/types/planner";
 
-export const storageKey = "mohammad-planner:data";
+export const storageKey = "planner:data";
+export const linkKey = "planner:device";
+
+const legacyKeys = {
+  [storageKey]: "mohammad-planner:data",
+  [linkKey]: "mohammad-planner:device",
+};
+type StorageKey = keyof typeof legacyKeys;
+
+export function readStoredValue(key: StorageKey) {
+  const current = localStorage.getItem(key);
+  if (current !== null) return current;
+  const legacy = localStorage.getItem(legacyKeys[key]);
+  if (legacy !== null) {
+    try { localStorage.setItem(key, legacy); }
+    catch { return legacy; }
+    localStorage.removeItem(legacyKeys[key]);
+  }
+  return legacy;
+}
+
+export function removeStoredValue(key: StorageKey) {
+  localStorage.removeItem(legacyKeys[key]);
+  localStorage.removeItem(key);
+}
 
 export function readRaw() {
-  try { return window.localStorage.getItem(storageKey); }
+  try { return readStoredValue(storageKey); }
   catch { throw new Error("دسترسی به حافظهٔ مرورگر ممکن نیست."); }
 }
 
@@ -22,6 +45,6 @@ export function writeData(data: PlannerData) {
 }
 
 export function clearData() {
-  try { window.localStorage.removeItem(linkKey); window.localStorage.removeItem(storageKey); }
+  try { removeStoredValue(linkKey); removeStoredValue(storageKey); }
   catch { throw new Error("حذف داده‌ها از حافظهٔ مرورگر ممکن نبود."); }
 }

@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { addDays, dateInput, fullDay } from "../../src/features/calendar/dates";
+import { encodeBackup } from "../../src/features/backup/schema";
+import { defaults } from "../../src/lib/defaults";
 import { storageKey } from "../../src/lib/storage";
 
 const day = "2026-11-25";
@@ -13,7 +15,7 @@ const dialog = (page: Page) => page.getByRole("dialog");
 async function openPlanner(page: Page) {
   await page.clock.setFixedTime(clock);
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /، محمد/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^(صبح بخیر|ظهر بخیر|عصر بخیر|شب‌بخیر)/ })).toBeVisible();
 }
 
 async function listDay(page: Page, date: string) {
@@ -95,7 +97,7 @@ test("class exceptions, meeting conflict, linked task, attachment and atomic bac
   const downloaded = page.waitForEvent("download");
   await page.getByRole("button", { name: "دانلود بکاپ JSON" }).click();
   const download = await downloaded;
-  expect(download.suggestedFilename()).toMatch(/^mohammad-planner-\d{4}-\d{2}-\d{2}\.json$/);
+  expect(download.suggestedFilename()).toMatch(/^planner-\d{4}-\d{2}-\d{2}\.json$/);
   const backup = await readFile((await download.path())!);
 
   const { context, page: fresh } = await newProfile(browser);
@@ -238,4 +240,44 @@ test("the custom time picker supports touch, exact minutes and keyboard dismissa
   } finally {
     await context.close();
   }
+});
+
+
+test("display name survives refresh and settings controls align on desktop and mobile", async ({ page }) => {
+  const legacyKey = "mohammad-planner:data";
+  await openPlanner(page);
+  await page.evaluate(({ key, data }) => localStorage.setItem(key, data), { key: legacyKey, data: encodeBackup(defaults()) });
+  await page.reload();
+  await expect(page.getByRole("heading", { name: /^(صبح بخیر|ظهر بخیر|عصر بخیر|شب‌بخیر) ✦$/ })).toBeVisible();
+  expect(await page.evaluate((key) => localStorage.getItem(key), storageKey)).not.toBeNull();
+  expect(await page.evaluate((key) => localStorage.getItem(key), legacyKey)).toBeNull();
+
+  await nav(page, "تنظیمات").click();
+  const name = page.getByRole("textbox", { name: "نام نمایشی", exact: true });
+  await expect(name).toHaveValue("");
+  const theme = page.getByRole("combobox", { name: "تم", exact: true });
+  const zone = page.getByRole("combobox", { name: "منطقهٔ زمانی", exact: true });
+  const minimum = page.getByRole("textbox", { name: "حداقل بازهٔ آزاد (دقیقه)", exact: true });
+  const buffer = page.getByRole("textbox", { name: "حاشیهٔ استراحت (دقیقه)", exact: true });
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 860 });
+    const [themeBox, zoneBox, minimumBox, bufferBox] = await Promise.all(
+      [theme, zone, minimum, buffer].map((control) => control.boundingBox()),
+    );
+    expect(themeBox!.y).toBeCloseTo(zoneBox!.y);
+    expect(themeBox!.height).toBeCloseTo(zoneBox!.height);
+    expect(minimumBox!.y).toBeCloseTo(bufferBox!.y);
+    if (width === 1280) expect(themeBox!.width).toBeLessThan(zoneBox!.width / 2);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
+
+  await name.fill("  آوا  ");
+  await page.getByRole("button", { name: "ذخیرهٔ تنظیمات" }).click();
+  await expect(name).toHaveValue("آوا");
+  await page.reload();
+  await expect(name).toHaveValue("آوا");
+  await nav(page, "داشبورد").click();
+  await expect(page.getByRole("heading", { name: /، آوا/ })).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 860 });
+  await expect(page.locator(".profile strong")).toHaveText("آوا");
 });

@@ -6,7 +6,8 @@ import { Button, Dialog, Field } from "@/components/ui";
 import { fa } from "@/features/calendar/dates";
 import { downloadBackup } from "@/features/settings/settings";
 import type { PlannerData } from "@/types/planner";
-import { digest, linkKey, newPair, pairCode, parsePair, pull, push, remoteSha, verifyPrivate, type Binding } from "./vault";
+import { linkKey, readStoredValue, removeStoredValue } from "@/lib/storage";
+import { digest, newPair, pairCode, parsePair, pull, push, remoteSha, verifyPrivate, type Binding } from "./vault";
 
 type Snapshot = { data: PlannerData; revision: number };
 type Decision = { remote: PlannerData; binding: Binding; revision: number; joining: boolean; old: string | null };
@@ -29,7 +30,7 @@ export function DeviceSync({ data, revision, apply, visible }: Snapshot & {
   const [deferred, setDeferred] = useState(false);
   const [unlink, setUnlink] = useState(false);
   const persist = useCallback((next: Binding, old: string | null) => {
-    if (!active.current || localStorage.getItem(linkKey) !== old) throw new Error("تنظیم اتصال تغییر کرده است. دوباره بررسی کن.");
+    if (!active.current || readStoredValue(linkKey) !== old) throw new Error("تنظیم اتصال تغییر کرده است. دوباره بررسی کن.");
     localStorage.setItem(linkKey, JSON.stringify(next));
     setBinding(next);
   }, []);
@@ -45,7 +46,7 @@ export function DeviceSync({ data, revision, apply, visible }: Snapshot & {
   useEffect(() => {
     function load() {
       try {
-        const raw = localStorage.getItem(linkKey);
+        const raw = readStoredValue(linkKey);
         const next = raw ? JSON.parse(raw) as Binding : null;
         if (next) parsePair(pairCode(next));
         setBinding(next);
@@ -59,14 +60,14 @@ export function DeviceSync({ data, revision, apply, visible }: Snapshot & {
     return () => window.removeEventListener("storage",listener);
   }, []);
   const sync = useCallback(() => run(async () => {
-    const old = localStorage.getItem(linkKey);
+    const old = readStoredValue(linkKey);
     if (!old || decision) return;
     const b: Binding = JSON.parse(old);
     const snap = current.current;
     const hash = await digest(snap.data);
     await verifyPrivate(b,b.token);
     const sha = await remoteSha(b,b.token);
-    const stillCurrent = () => active.current && localStorage.getItem(linkKey) === old && current.current.revision === snap.revision;
+    const stillCurrent = () => active.current && readStoredValue(linkKey) === old && current.current.revision === snap.revision;
     if (!stillCurrent()) return;
     if (sha === b.sha) {
       if (hash !== b.hash) {
@@ -118,7 +119,7 @@ export function DeviceSync({ data, revision, apply, visible }: Snapshot & {
         e.preventDefault();
         const form = new FormData(e.currentTarget);
         void run(async () => {
-          const old = localStorage.getItem(linkKey);
+          const old = readStoredValue(linkKey);
           if (old) throw new Error("این مرورگر از قبل متصل است.");
           const snap = current.current;
           const token = String(form.get("token")).trim();
@@ -157,13 +158,13 @@ export function DeviceSync({ data, revision, apply, visible }: Snapshot & {
         {message && <p role="status">{message}</p>}
         {revision !== decision.revision && <p className="warning">داده‌های محلی تغییر کردند. <Button onClick={() => { setDecision(null); if (decision.joining) setMode("join"); }}>بررسی دوبارهٔ نسخه‌ها</Button></p>}
         <Button variant="primary" disabled={working || revision !== decision.revision} onClick={() => void run(async () => {
-          if (localStorage.getItem(linkKey) !== decision.old) throw new Error("اتصال تغییر کرده است.");
+          if (readStoredValue(linkKey) !== decision.old) throw new Error("اتصال تغییر کرده است.");
           if (!current.current.apply(decision.remote,decision.revision)) throw new Error("ذخیرهٔ نسخهٔ دریافتی انجام نشد.");
           persist(decision.binding,decision.old); setDecision(null); setMessage("نسخهٔ مخزن روی دستگاه ذخیره شد.");
         })}>جایگزینی داده‌های این دستگاه</Button>
         {!decision.joining && <Button disabled={working || revision !== decision.revision} onClick={() => void run(async () => {
           const b = decision.binding;
-          if (localStorage.getItem(linkKey) !== decision.old) throw new Error("اتصال تغییر کرده است.");
+          if (readStoredValue(linkKey) !== decision.old) throw new Error("اتصال تغییر کرده است.");
           await verifyPrivate(b,b.token);
           const sha = await push(b,b.token,data,b.sha);
           persist({ ...b, sha, hash:await digest(data) },decision.old);
@@ -172,7 +173,7 @@ export function DeviceSync({ data, revision, apply, visible }: Snapshot & {
       </div></Dialog>}
     {unlink && <Dialog title="قطع اتصال این دستگاه" close={() => setUnlink(false)}><p>کلید و توکن ذخیره‌شدهٔ این اتصال از مرورگر حذف می‌شوند. داده‌های محلی و نسخهٔ مخزن در دسترس می‌مانند.</p>
       <footer className="dialog-actions"><Button onClick={() => setUnlink(false)}>انصراف</Button><Button variant="danger" disabled={working} onClick={() => {
-        localStorage.removeItem(linkKey); setBinding(null); setDecision(null); setUnlink(false); setMessage("اتصال قطع شد.");
+        removeStoredValue(linkKey); setBinding(null); setDecision(null); setUnlink(false); setMessage("اتصال قطع شد.");
       }}>تأیید قطع اتصال</Button></footer></Dialog>}
   </section>;
 }

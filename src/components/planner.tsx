@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, BarChart3, Moon, Sun, Plus, BookOpen, CalendarDays, CalendarRange, CheckCircle2, ClipboardList, Clock3, LayoutDashboard, LoaderCircle, Settings2, X } from "lucide-react";
+import { AlertTriangle, BarChart3, Moon, Sun, Plus, BookOpen, CalendarDays, CalendarRange, CheckCircle2, ClipboardList, Clock3, LayoutDashboard, LoaderCircle, Settings2, UserRound, X } from "lucide-react";
 import { Capture } from "./capture";
 import { Review } from "@/features/review/review";
 import { DeviceSync } from "@/features/sync/device-sync";
@@ -89,6 +89,7 @@ export function Planner() {
 
   const data = store?.data;
   const usable = data && !!now;
+  const displayName = data?.settings.displayName;
   const zone = data?.settings.zone ?? "Asia/Tehran";
   const today = now ? todayIn(now, zone) : "";
   const date = selected ?? today;
@@ -220,7 +221,7 @@ export function Planner() {
       </nav>
       <div className="sidebar-bottom">
         <div className="zone-box"><span className="tile violet"><Clock3 size={17} /></span><div><strong>منطقهٔ زمانی</strong><small dir="ltr">{zone}</small></div></div>
-        <div className="profile"><span className="avatar">{(data?.settings.displayName || "محمد").slice(0,1)}</span><div><strong>{data?.settings.displayName || "محمد"}</strong><small>فضای شخصی</small></div></div>
+        <div className="profile"><span className="avatar" aria-hidden="true">{displayName ? Array.from(displayName)[0] : <UserRound size={18} />}</span><div><strong>{displayName || "فضای شخصی"}</strong></div></div>
       </div>
     </aside>
     <div className="workspace">
