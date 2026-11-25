@@ -81,6 +81,7 @@ export interface ActiveHours {
 }
 
 export interface Settings {
+  displayName?: string;
   calendar: Calendar;
   zone: string;
   weekStart: number;

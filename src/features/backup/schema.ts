@@ -61,6 +61,7 @@ const task = z.object({
   due: date.nullable(), eventId: id.nullable(), lessonId: id.nullable(), categoryId: id.nullable(), done: z.boolean(),
 });
 export const settingsSchema = z.object({
+  displayName: z.string().trim().max(50).optional(),
   calendar, zone, weekStart: weekdayNumber, theme: z.enum(["light", "dark", "system"]),
   minimum: z.number().int().min(1).max(720), buffer: z.number().int().min(0).max(180),
   active: z.array(z.array(hours).max(24)).length(7),

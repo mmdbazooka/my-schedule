@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/select";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AlertTriangle, Paperclip, Plus, Save, Trash2 } from "lucide-react";
 import { Button, Check, DateField, Field, TimeField } from "@/components/ui";
@@ -12,6 +13,7 @@ import { eventKinds, kindForCategory, statusLabels } from "@/lib/defaults";
 import type { Attachment, EventFields, EventKind, Interval, PlannerData, PlannerEvent, Recurrence, Timing } from "@/types/planner";
 
 export interface EventDraft {
+  title?: string;
   date: string;
   slot?: Interval;
   categoryId?: string;
@@ -176,23 +178,23 @@ export function EventForm({ data, draft, cancel, stale, save }: {
     finally { setPending(false); }
   }
 
-  return <form className="form" onSubmit={submit} onChange={() => { if (warning) setWarning(null); }}>
+  return <form className="form event-editor" onSubmit={submit} onChange={() => { if (warning) setWarning(null); }}>
     {draft.occurrence && <p className="info">تغییرات این فرم فقط روی نوبت انتخاب‌شده اعمال می‌شود.</p>}
     {stale && <p className="error" role="alert">داده‌ها در تب دیگری تغییر کرده‌اند. فرم را ببندید و دوباره باز کنید.</p>}
-    <Field label="عنوان"><input name="title" required maxLength={160} autoFocus defaultValue={fields?.title ?? linkedTask?.title ?? ""} placeholder="مثلاً کلاس مبانی طراحی" /></Field>
+    <Field label="عنوان"><input name="title" required maxLength={160} autoFocus defaultValue={fields?.title ?? draft.title ?? linkedTask?.title ?? ""} placeholder="مثلاً کلاس مبانی طراحی" /></Field>
     <div className="form-grid">
-      <Field label="دسته‌بندی"><select name="category" defaultValue={category}
-        onChange={(event) => { if (!kindTouched) setKind(kindForCategory(event.target.value)); }}>
+      <Field label="دسته‌بندی"><Select name="category" defaultValue={category}
+        onValueChange={(choice) => { if (!kindTouched) setKind(kindForCategory(choice)); }}>
         {data.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-      </select></Field>
-      <Field label="وضعیت"><select name="status" defaultValue={fields?.status ?? "planned"}>
+      </Select></Field>
+      <Field label="وضعیت"><Select name="status" defaultValue={fields?.status ?? "planned"}>
         {Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-      </select></Field>
+      </Select></Field>
     </div>
     <div className="form-grid">
-      <Field label="نوع رویداد"><select value={kind} onChange={(event) => { setKindTouched(true); setKind(event.target.value as EventKind); }}>
+      <Field label="نوع رویداد"><Select value={kind} onValueChange={(choice) => { setKindTouched(true); setKind(choice as EventKind); }}>
         {Object.entries(eventKinds).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-      </select></Field>
+      </Select></Field>
       {data.lessons.length > 0 && <LessonSelect lessons={data.lessons} value={fields ? fields.lessonId : draft.lessonId ?? linkedTask?.lessonId} />}
     </div>
     <div className="check-row"><Check checked={allDay} onChange={(event) => setAllDay(event.target.checked)}>تمام‌روز</Check><Check name="busy" defaultChecked={fields?.busy ?? true}>زمان را اشغال می‌کند</Check></div>
@@ -203,18 +205,18 @@ export function EventForm({ data, draft, cancel, stale, save }: {
     </div>
     {!allDay && <small className="muted">منطقهٔ زمانی رویداد <bdi>{editZone}</bdi></small>}
     {!draft.occurrence && !linkedTask && <>
-      <Field label="تکرار"><select value={frequency} onChange={(event) => setFrequency(event.target.value)}>
+      <Field label="تکرار"><Select value={frequency} onValueChange={(choice) => setFrequency(choice)}>
         <option value="">بدون تکرار</option><option value="daily">روزانه</option><option value="weekly">هفتگی</option><option value="monthly">ماهانه</option>
-      </select></Field>
+      </Select></Field>
       {frequency === "weekly" && <fieldset><legend>روزهای تکرار</legend><div className="check-row">{week.map((value) => <Check key={value} name="weekdays" value={value}
         defaultChecked={rule?.weekdays.includes(value) || weekday(startDate) === value}>{weekdays[value]}</Check>)}</div></fieldset>}
       {frequency === "monthly" && <Field label="مبنای تکرار ماهانه" hint="در ماهی که روز انتخاب‌شده وجود ندارد، آن نوبت رد می‌شود.">
-        <select name="monthCalendar" defaultValue={rule?.calendar ?? calendar}><option value="persian">همان روزِ ماه شمسی</option><option value="gregory">همان روزِ ماه میلادی</option></select>
+        <Select name="monthCalendar" defaultValue={rule?.calendar ?? calendar}><option value="persian">همان روزِ ماه شمسی</option><option value="gregory">همان روزِ ماه میلادی</option></Select>
       </Field>}
       {frequency && <><div className="form-grid">
-        <Field label="پایان تکرار"><select value={endType} onChange={(event) => setEndType(event.target.value as typeof endType)}>
+        <Field label="پایان تکرار"><Select value={endType} onValueChange={(choice) => setEndType(choice as typeof endType)}>
           <option value="never">بدون پایان</option><option value="until">تا تاریخ مشخص</option><option value="count">پس از تعداد نوبت</option>
-        </select></Field>
+        </Select></Field>
         {endType === "until" && <DateField label="آخرین تاریخ تکرار" name="until" date={rule?.end.type === "until" ? rule.end.date : startDate} calendar={calendar} weekStart={weekStart} onPick={() => setWarning(null)} required />}
         {endType === "count" && <Field label="تعداد نوبت‌ها"><input name="count" inputMode="numeric" required defaultValue={rule?.end.type === "count" ? rule.end.count : 10} /></Field>}
       </div><small className="muted">تداخل نوبت‌های سری تا یک سال از شروع بررسی می‌شود.</small></>}

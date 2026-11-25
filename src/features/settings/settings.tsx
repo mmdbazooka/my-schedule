@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/select";
 import { useRef, useState } from "react";
 import { Clock3, Download, HardDrive, Palette, Plus, Settings2, Target, Trash2, Upload } from "lucide-react";
 import { Button, Dialog, Field, IconButton } from "@/components/ui";
@@ -114,16 +115,17 @@ export function SettingsForm({ current, revision, save }: {
     <section className="panel padded settings-card">
       <div className="panel-heading"><span className="tile violet"><Settings2 size={20} /></span><div><h2>نمایش و تقویم</h2><p>زبان نمایش فارسی و ساعت‌ها ۲۴ساعته‌اند.</p></div></div>
       <div className="form-grid">
-        <Field label="تقویم"><select value={settings.calendar} onChange={(event) => change({ calendar: event.target.value as Preferences["calendar"] })}>
-          <option value="persian">شمسی</option><option value="gregory">میلادی</option></select></Field>
-        <Field label="تم"><select value={settings.theme} onChange={(event) => change({ theme: event.target.value as Preferences["theme"] })}>
-          <option value="system">سیستم</option><option value="light">روشن</option><option value="dark">تاریک</option></select></Field>
+        <Field label="نام نمایشی"><input value={settings.displayName ?? "محمد"} maxLength={50} onChange={(event) => change({ displayName: event.target.value })} /></Field>
+        <Field label="تقویم"><Select value={settings.calendar} onValueChange={(choice) => change({ calendar: choice as Preferences["calendar"] })}>
+          <option value="persian">شمسی</option><option value="gregory">میلادی</option></Select></Field>
+        <Field label="تم"><Select value={settings.theme} onValueChange={(choice) => change({ theme: choice as Preferences["theme"] })}>
+          <option value="system">سیستم</option><option value="light">روشن</option><option value="dark">تاریک</option></Select></Field>
         <Field label="منطقهٔ زمانی" hint="نام IANA را انتخاب یا وارد کنید.">
           <input dir="ltr" list="time-zones" value={settings.zone} required onChange={(event) => change({ zone: event.target.value.trim() })} />
         </Field>
         <datalist id="time-zones">{Array.from(new Set([...knownZones, ...Intl.supportedValuesOf("timeZone")])).map((value) => <option value={value} key={value} />)}</datalist>
-        <Field label="شروع هفته"><select value={settings.weekStart} onChange={(event) => change({ weekStart: Number(event.target.value) })}>
-          {weekdays.map((value, index) => <option key={value} value={index}>{value}</option>)}</select></Field>
+        <Field label="شروع هفته"><Select value={settings.weekStart} onValueChange={(choice) => change({ weekStart: Number(choice) })}>
+          {weekdays.map((value, index) => <option key={value} value={index}>{value}</option>)}</Select></Field>
       </div>
     </section>
     <section className="panel padded settings-card">

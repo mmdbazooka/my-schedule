@@ -48,7 +48,7 @@ export function Dashboard({ data, now, create, open, day, select, calendarPage, 
   return <>
     <div className="page-heading dash-heading">
       <div><span className="date-kicker"><CalendarDays size={16} /> {fullDay(today, calendar)}</span>
-        <h1>{salutation}، محمد <span className="greeting-mark">✦</span></h1>
+        <h1>{salutation}، {data.settings.displayName || "محمد"} <span className="greeting-mark">✦</span></h1>
         <p>برنامه‌ها و وقت‌های آزاد امروزت رو یک‌جا ببین.</p>
       </div>
       <Button variant="primary" onClick={() => create({ date: today })}><Plus size={20} /> رویداد جدید</Button>

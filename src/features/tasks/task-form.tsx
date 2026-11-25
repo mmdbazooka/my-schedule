@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/select";
 import { useState } from "react";
 import { Button, Check, DateField, Dialog, Field } from "@/components/ui";
 import { latin, parseDateInput } from "@/features/calendar/dates";
@@ -38,12 +39,12 @@ export function TaskForm({ data, task, lessonId, stale, close, save, saveError }
       <Field label="عنوان کار"><input name="title" required maxLength={160} autoFocus defaultValue={task?.title} /></Field>
       <div className="form-grid">
         <Field label="مدت تخمینی به دقیقه"><input name="minutes" required inputMode="numeric" defaultValue={task?.minutes ?? 60} /></Field>
-        <Field label="اولویت"><select name="priority" defaultValue={task?.priority ?? "medium"}>
+        <Field label="اولویت"><Select name="priority" defaultValue={task?.priority ?? "medium"}>
           {Object.entries(priorityLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-        </select></Field>
-        <Field label="دسته‌بندی کار"><select name="category" defaultValue={task?.categoryId ?? ""}>
+        </Select></Field>
+        <Field label="دسته‌بندی کار"><Select name="category" defaultValue={task?.categoryId ?? ""}>
           <option value="">بدون دستهٔ مشخص</option>{data.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-        </select></Field>
+        </Select></Field>
         {data.lessons.length > 0 && <LessonSelect lessons={data.lessons} value={task?.lessonId ?? lessonId} />}
       </div>
       <DateField label="تاریخ مهلت (اختیاری)" name="due" date={task?.due} calendar={calendar} weekStart={weekStart} />

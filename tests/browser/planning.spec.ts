@@ -73,7 +73,7 @@ test("restore v2, manage a lesson, rank travel-aware suggestions, and copy a wee
   await expect(page.getByRole("heading", { name: "منطق آزمایشی" })).toBeVisible();
 
   await button(page, "جلسهٔ مطالعه").click();
-  await expect(exactField(page, "درس").locator("option:checked")).toHaveText("منطق آزمایشی");
+  await expect(exactField(page, "درس")).toHaveText("منطق آزمایشی");
   await exactField(page, "عنوان").fill("مطالعهٔ دو ساعته");
   await exactField(page, "ساعت شروع").fill("۱۷:۰۰");
   await exactField(page, "ساعت پایان").fill("۱۹:۰۰");
@@ -102,13 +102,15 @@ test("restore v2, manage a lesson, rank travel-aware suggestions, and copy a wee
   await button(page, "ویرایش").click();
   await button(page, "کل سری").click();
   await exactField(page, "رفت‌وآمد بعد (دقیقه)").fill("۳۰");
-  await exactField(page, "درس").selectOption({ label: "منطق آزمایشی" });
+  await exactField(page, "درس").click();
+  await page.getByRole("option", { name:"منطق آزمایشی", exact:true }).click();
   await button(page, "ذخیرهٔ رویداد").click();
   await expect(modal(page)).toHaveCount(0);
 
   await nav(page, "تنظیمات").click();
   await button(page, "زمان ترجیحی جدید").click();
-  await exactField(page, "روز ترجیح").selectOption(String(weekday(date)));
+  await exactField(page, "روز ترجیح").click();
+  await page.getByRole("option", { name:"چهارشنبه", exact:true }).click();
   await exactField(page, "شروع ترجیح").fill("۱۵:۰۰");
   await exactField(page, "پایان ترجیح").fill("۱۷:۰۰");
   await button(page, "ذخیرهٔ ترجیح").click();
@@ -120,7 +122,8 @@ test("restore v2, manage a lesson, rank travel-aware suggestions, and copy a wee
 
   await nav(page, "تقویم").click();
   await button(page, "روز").click();
-  await page.getByLabel("پیشنهاد برای دسته").selectOption("study");
+  await page.getByLabel("پیشنهاد برای دسته").click();
+  await page.getByRole("option", { name:"مطالعه", exact:true }).click();
   await expect(page.locator(".free-section").getByRole("button", { name: /۱۵:۳۰ تا ۱۶:۳۰.*مطابق ترجیح/ })).toBeVisible();
 
   await nav(page, "داشبورد").click();

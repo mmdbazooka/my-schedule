@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/select";
 import { useState } from "react";
 import { Clock3, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button, Dialog, Field, IconButton, TimeField } from "@/components/ui";
@@ -44,12 +45,12 @@ export function Preferences({ data, revision, save, saveError }: {
         if (save(next, edit.revision)) setEdit(null);
       }}>
         <div className="form-grid">
-          <Field label="دستهٔ ترجیح"><select name="category" defaultValue={edit.rule?.categoryId ?? (names.has("study") ? "study" : data.categories[0].id)}>
+          <Field label="دستهٔ ترجیح"><Select name="category" defaultValue={edit.rule?.categoryId ?? (names.has("study") ? "study" : data.categories[0].id)}>
             {data.categories.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
-          </select></Field>
-          <Field label="روز ترجیح"><select name="weekday" defaultValue={edit.rule?.weekday ?? data.settings.weekStart}>
+          </Select></Field>
+          <Field label="روز ترجیح"><Select name="weekday" defaultValue={edit.rule?.weekday ?? data.settings.weekStart}>
             {days.map((day) => <option key={day} value={day}>{weekdays[day]}</option>)}
-          </select></Field>
+          </Select></Field>
           <TimeField name="start" label="شروع ترجیح" time={edit.rule?.start ?? "09:00"} />
           <TimeField name="end" label="پایان ترجیح" time={edit.rule?.end ?? "11:00"} />
         </div>

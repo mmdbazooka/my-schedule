@@ -1,4 +1,5 @@
 import { decodeBackup, encodeBackup } from "@/features/backup/schema";
+import { linkKey } from "@/features/sync/vault";
 import { defaults } from "@/lib/defaults";
 import type { PlannerData } from "@/types/planner";
 
@@ -21,6 +22,6 @@ export function writeData(data: PlannerData) {
 }
 
 export function clearData() {
-  try { window.localStorage.removeItem(storageKey); }
+  try { window.localStorage.removeItem(linkKey); window.localStorage.removeItem(storageKey); }
   catch { throw new Error("حذف داده‌ها از حافظهٔ مرورگر ممکن نبود."); }
 }

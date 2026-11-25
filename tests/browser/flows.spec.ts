@@ -36,9 +36,11 @@ test("class exceptions, meeting conflict, linked task, attachment and atomic bac
   await dialog(page).getByLabel("عنوان", { exact: true }).fill("کلاس آزمایشی");
   await dialog(page).getByLabel("ساعت شروع").fill("۱۰:۰۰");
   await dialog(page).getByLabel("ساعت پایان").fill("۱۱:۰۰");
-  await dialog(page).getByLabel("تکرار", { exact: true }).selectOption("weekly");
+  await dialog(page).getByLabel("تکرار", { exact: true }).click();
+  await page.getByRole("option", { name:"هفتگی", exact:true }).click();
   await dialog(page).getByLabel("دوشنبه", { exact: true }).check();
-  await dialog(page).getByLabel("پایان تکرار", { exact: true }).selectOption("until");
+  await dialog(page).getByLabel("پایان تکرار", { exact: true }).click();
+  await page.getByRole("option", { name:"تا تاریخ مشخص", exact:true }).click();
   await dialog(page).getByLabel("آخرین تاریخ تکرار", { exact: true }).fill(dateInput(addDays(day, 21), "persian"));
   await dialog(page).getByRole("button", { name: "ذخیرهٔ رویداد" }).click();
   await expect(dialog(page)).toHaveCount(0);

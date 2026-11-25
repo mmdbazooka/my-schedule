@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, BookOpen, CalendarDays, CalendarRange, CheckCircle2, ClipboardList, Clock3, LayoutDashboard, LoaderCircle, Settings2, X } from "lucide-react";
+import { AlertTriangle, BarChart3, Moon, Sun, Plus, BookOpen, CalendarDays, CalendarRange, CheckCircle2, ClipboardList, Clock3, LayoutDashboard, LoaderCircle, Settings2, X } from "lucide-react";
+import { Capture } from "./capture";
+import { Review } from "@/features/review/review";
+import { DeviceSync } from "@/features/sync/device-sync";
 import { Button, Dialog, IconButton } from "@/components/ui";
 import { CalendarView } from "@/features/calendar/calendar-view";
 import { clockLabel, todayIn } from "@/features/calendar/dates";
@@ -24,6 +27,7 @@ const navigation = [
   { key: "calendar", label: "تقویم", icon: CalendarDays },
   { key: "lessons", label: "درس‌ها", icon: BookOpen },
   { key: "tasks", label: "کارهای بدون زمان", icon: ClipboardList },
+  { key: "review", label: "مرور هفتگی", icon: BarChart3 },
   { key: "settings", label: "تنظیمات", icon: Settings2 },
 ] as const;
 type Page = typeof navigation[number]["key"];
@@ -42,6 +46,8 @@ export function Planner() {
   const [selected, setSelected] = useState<string | null>(null);
   const [modal, setModal] = useState<{ draft: EventDraft; revision: number } | null>(null);
   const [detail, setDetail] = useState<{ event: Occurrence; revision: number } | null>(null);
+  const [capture, setCapture] = useState<number | null>(null);
+  const [syncEpoch, setSyncEpoch] = useState(0);
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
 
   const sync = useCallback((external = false) => {
@@ -87,6 +93,18 @@ export function Planner() {
   const today = now ? todayIn(now, zone) : "";
   const date = selected ?? today;
 
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.repeat || event.code !== "KeyN" ||
+        !latest.current?.data || document.querySelector("dialog[open]") ||
+        (event.target instanceof Element && event.target.closest('input,textarea,select,[contenteditable="true"],[role="combobox"],[role="option"]'))) return;
+      event.preventDefault();
+      setNotice(null); setCapture(latest.current.revision);
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, []);
+
   function navigate(next: Page) {
     if (next !== route) {
       setRoute(next);
@@ -109,7 +127,7 @@ export function Planner() {
       const checked = next ? validateData(next) : defaults();
       let raw: string | null = null;
       if (next) raw = writeData(checked);
-      else clearData();
+      else { clearData(); setSyncEpoch((epoch) => epoch + 1); }
       const updated = { data: checked, raw, error: "", revision: current.revision + 1 };
       latest.current = updated;
       setStore(updated);
@@ -202,13 +220,18 @@ export function Planner() {
       </nav>
       <div className="sidebar-bottom">
         <div className="zone-box"><span className="tile violet"><Clock3 size={17} /></span><div><strong>منطقهٔ زمانی</strong><small dir="ltr">{zone}</small></div></div>
-        <div className="profile"><span className="avatar">م</span><div><strong>محمد</strong><small>فضای شخصی</small></div></div>
+        <div className="profile"><span className="avatar">{(data?.settings.displayName || "محمد").slice(0,1)}</span><div><strong>{data?.settings.displayName || "محمد"}</strong><small>فضای شخصی</small></div></div>
       </div>
     </aside>
     <div className="workspace">
       <header className="topbar">
         <div className="crumb"><span className="mobile-brand brand-icon"><CalendarRange size={19} /></span><span>برنامه ریز</span><span className="crumb-divider">/</span><strong>{navigation.find((item) => item.key === route)?.label}</strong></div>
-        {usable && <div className="top-clock" aria-label="ساعت محلی"><Clock3 size={16} /><span>{clockLabel(now, zone)}</span></div>}
+        {usable && <div className="header-tools"><Button variant="primary" title="ثبت سریع (N)" onClick={() => { setNotice(null); setCapture(store.revision); }}><Plus size={16} />ثبت سریع</Button>
+          <IconButton label="تغییر تم روشن و تاریک" onClick={() => {
+            const dark = data.settings.theme === "dark" || (data.settings.theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+            commit({ ...data, settings: { ...data.settings, theme: dark ? "light" : "dark" } }, dark ? "تم روشن شد." : "تم تاریک شد.");
+          }}><Sun className="light-switch" size={18} /><Moon className="dark-switch" size={18} /></IconButton>
+          <div className="top-clock" aria-label="ساعت محلی"><Clock3 size={16} /><span>{clockLabel(now, zone)}</span></div></div>}
       </header>
       <main className="content" id="main-content" tabIndex={-1}>
         {!store && <div className="panel loading" role="status"><LoaderCircle size={24} /> در حال خواندن داده‌های مرورگر…</div>}
@@ -223,6 +246,7 @@ export function Planner() {
           {route === "dashboard" && <Dashboard data={data} now={now} day={date} select={setSelected} create={create} open={open} revision={store.revision}
             saveError={notice?.error ? notice.text : undefined} reschedule={(pending, revision) => commit(pending, "زمان‌بندی به‌روز شد.", revision)}
             calendarPage={() => navigate("calendar")} sample={() => commit(sampleData(data, today), "برنامهٔ ساختگی بارگذاری شد.")} />}
+          {route === "review" && <Review data={data} now={now} open={open} />}
           {route === "calendar" && <CalendarView data={data} date={date} select={setSelected} now={now} create={create} open={open}
             revision={store.revision} saveError={notice?.error ? notice.text : undefined}
             saveCopy={(events, revision) => commit({ ...data, events: [...data.events, ...events] }, "رویدادها در هفتهٔ بعد کپی شدند.", revision)} />}
@@ -239,7 +263,7 @@ export function Planner() {
               tasks: data.tasks.map((item) => item.id === task.id ? { ...item, eventId: null } : item),
             }, "زمان‌بندی لغو شد و کار به فهرست انتظار برگشت.")} />}
           {route === "settings" && <div className="settings-page">
-            <div className="page-heading"><div><h1>تنظیمات</h1><p>تقویم، ساعت‌های فعال و داده‌های برنامه را مدیریت کن.</p></div></div>
+            <div className="page-heading"><div><h1>تنظیمات</h1><p>تقویم، ساعت‌های فعال و داده‌های برنامه را مدیریت کن.</p></div><Button onClick={() => document.getElementById("device-sync")?.focus()}>اتصال دستگاه‌ها</Button></div>
             <div className="settings-flow">
               <SettingsForm current={data.settings} revision={store.revision}
                 save={(settings) => commit({ ...data, settings }, "تنظیمات ذخیره شدند.")} />
@@ -251,8 +275,12 @@ export function Planner() {
             </div>
           </div>}
         </>}
+        {usable && <DeviceSync key={syncEpoch} data={data} revision={store.revision} visible={route === "settings"}
+          apply={(next, revision) => commit(next, "داده‌های دستگاه دریافت شدند.", revision)} />}
       </main>
     </div>
+    {usable && capture !== null && <Capture today={today} close={() => setCapture(null)} create={create}
+      stale={capture !== store.revision} save={(task) => saveTask(task, capture)} error={notice?.error ? notice.text : undefined} />}
     {usable && modal && <Dialog title={modal.draft.series ? "ویرایش رویداد" : "رویداد جدید"} close={() => setModal(null)}>
       <EventForm data={data} draft={modal.draft} stale={modal.revision !== store.revision} save={saveEvent} cancel={() => setModal(null)} />
       {notice?.error && <p className="error" role="alert">{notice.text}</p>}

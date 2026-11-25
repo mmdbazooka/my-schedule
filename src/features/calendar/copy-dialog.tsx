@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/select";
 import { useMemo, useState } from "react";
 import { AlertTriangle, Copy } from "lucide-react";
 import { Button, Check, Dialog, Field } from "@/components/ui";
@@ -70,9 +71,9 @@ export function CopyDialog({ data, from, revision, stale, close, save, saveError
           <small className="muted">مبدأ {fullDay(sources[index].displayDate, calendar)} · {eventTime(source.timing, zone)} · {statusLabels[source.status]}</small>
           {row.include && <>
             <div className="form-grid">
-              <Field label={`روز مقصد ${source.title}`}><select value={row.date} onChange={(event) => adjust(row.id, { date: event.target.value })}>
+              <Field label={`روز مقصد ${source.title}`}><Select value={row.date} onValueChange={(choice) => adjust(row.id, { date: choice })}>
                 {choices.map((date) => <option key={date} value={date}>{fullDay(date, calendar)}</option>)}
-              </select></Field>
+              </Select></Field>
               {!source.timing.allDay && <Field label={`ساعت مقصد ${source.title}`}><input dir="ltr" inputMode="numeric" value={row.time}
                 onChange={(event) => adjust(row.id, { time: event.target.value })} /></Field>}
             </div>

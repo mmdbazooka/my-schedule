@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/select";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, Clock3, Copy, List, Plus, Search, Sun, Timer } from "lucide-react";
 import { Button, DateField, Dialog, Empty, Field, IconButton } from "@/components/ui";
@@ -130,8 +131,8 @@ export function CalendarView({ data, date, select, now, create, open, revision, 
       </div>
       <div className="calendar-filters">
         <label className="search"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="جست‌وجوی عنوان رویداد…" aria-label="جست‌وجوی عنوان رویداد" /></label>
-        <select aria-label="فیلتر دسته" value={category} onChange={(event) => setCategory(event.target.value)}><option value="">همهٔ دسته‌ها</option>{data.categories.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</select>
-        <select aria-label="فیلتر وضعیت" value={status} onChange={(event) => setStatus(event.target.value as Status | "")}><option value="">همهٔ وضعیت‌ها</option>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+        <Select aria-label="فیلتر دسته" value={category} onValueChange={(choice) => setCategory(choice)}><option value="">همهٔ دسته‌ها</option>{data.categories.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}</Select>
+        <Select aria-label="فیلتر وضعیت" value={status} onValueChange={(choice) => setStatus(choice as Status | "")}><option value="">همهٔ وضعیت‌ها</option>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</Select>
         {view === "week" && <Button onClick={() => setCopy({ from: week, revision })}><Copy size={16} /> کپی برنامه به هفتهٔ بعد</Button>}
       </div>
       {view === "month" && <div className="month-wrap"><div className="month-grid">
@@ -161,10 +162,10 @@ export function CalendarView({ data, date, select, now, create, open, revision, 
     {(view === "day" || view === "week") && <section className="panel padded free-section">
       <div className="panel-heading"><span className="tile mint"><Timer size={20} /></span><div><h2>بازه‌های آزاد</h2><p>{buffer ? `با ${duration(buffer)} حاشیه و زمان رفت‌وآمد` : "در ساعات فعال، با در نظر گرفتن رفت‌وآمد"}</p></div></div>
       <div className="suggest-controls">
-        <Field label="پیشنهاد برای دسته"><select value={suggestCategory} onChange={(event) => setSuggestCategory(event.target.value)}>
+        <Field label="پیشنهاد برای دسته"><Select value={suggestCategory} onValueChange={(choice) => setSuggestCategory(choice)}>
           <option value="">همهٔ بازه‌های آزاد</option>
           {data.categories.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
-        </select></Field>
+        </Select></Field>
         {useSuggestions && <Field label="مدت برنامه (دقیقه)"><input inputMode="numeric" value={slotLength}
           onChange={(event) => setSlotLength(event.target.value)} /></Field>}
       </div>
