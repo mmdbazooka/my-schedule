@@ -174,7 +174,7 @@ test("restore v2, manage a lesson, rank travel-aware suggestions, and copy a wee
   const downloaded = page.waitForEvent("download");
   await button(page, "دانلود بکاپ JSON").click();
   const file = await readFile((await (await downloaded).path())!);
-  expect(JSON.parse(file.toString()).version).toBe(4);
+  expect(JSON.parse(file.toString()).version).toBe(5);
   const profile = await browser.newContext();
   try {
     const fresh = await profile.newPage();

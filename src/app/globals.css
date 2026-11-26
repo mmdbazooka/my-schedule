@@ -383,7 +383,7 @@ legend svg { display: inline-block; vertical-align: middle; }
   .app-shell[data-theme="system"] .light-switch { display:block; }
   .app-shell[data-theme="system"] .dark-switch { display:none; }
 }
-.settings-page + .settings-card { margin-top:13px; }
+.settings-page + .settings-card, .content > .settings-card + .settings-card { margin-top: 13px; }
 
 .event-editor > .dialog-actions { position:sticky; bottom:0; z-index:3; background:var(--panel); padding:8px 0; border-top:1px solid var(--line); }
 
@@ -482,6 +482,7 @@ legend svg { display: inline-block; vertical-align: middle; }
 .converter-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .85fr); gap: 12px; margin-bottom: 16px; }
 .converter-form { display: grid; gap: 12px; min-width: 0; }
 .converter-form .form-grid { align-items: start; }
+.converter-time-parts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .converter-presets { display: flex; flex-wrap: wrap; gap: 6px; }
 .converter-presets .button { min-height: 34px; color: var(--purple-text); }
 .converter-result { display: grid; align-content: space-between; gap: 14px; background: var(--selection); color: var(--purple-text); }

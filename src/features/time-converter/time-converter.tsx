@@ -2,20 +2,31 @@
 
 import { useState } from "react";
 import { CalendarPlus, Clock3, RotateCcw } from "lucide-react";
-import { TimePicker } from "@/components/time-picker";
-import { Button, DateField } from "@/components/ui";
-import { atTime, clockLabel, fullDay, inZone, isoDay, localizedTime, minute, normalizeTime, parseDateInput, todayIn } from "@/features/calendar/dates";
+import { Select } from "@/components/select";
+import { Button, DateField, Field } from "@/components/ui";
+import { atTime, clockLabel, fullDay, inZone, isoDay, localTime, minute, pad, parseDateInput, todayIn } from "@/features/calendar/dates";
 import type { EventDraft } from "@/features/events/event-form";
 import type { Settings } from "@/types/planner";
 import { destinations, iranZone } from "./zones";
 
 const presets = ["09:00", "12:00", "17:00", "21:00"];
 
+function clockParts(time: string) {
+  const [hour, minutes] = time.split(":").map(Number);
+  return { hour: hour % 12 || 12, minutes, period: hour >= 12 ? "PM" : "AM" };
+}
+
+function foreignClock(time: string) {
+  const { hour, minutes, period } = clockParts(time);
+  return `${hour}:${pad(minutes)} ${period}`;
+}
+
 export function TimeConverter({ now, settings, create }: {
   now: number;
   settings: Settings;
   create: (draft: EventDraft) => void;
 }) {
+  const [source, setSource] = useState(iranZone);
   const [selected, setSelected] = useState<number | null>(null);
   const [dateReset, setDateReset] = useState(0);
   const [inputTime, setInputTime] = useState<string | null>(null);
@@ -24,6 +35,14 @@ export function TimeConverter({ now, settings, create }: {
   const instant = selected ?? Math.floor(now / minute) * minute;
   const iranDate = todayIn(instant, iranZone);
   const { calendar, weekStart } = settings;
+  const sourceCalendar = source === iranZone ? calendar : "gregory";
+  const parts = clockParts(inputTime ?? localTime(now, source));
+
+  function setPart(patch: Partial<ReturnType<typeof clockParts>>) {
+    const { hour, minutes, period } = { ...parts, ...patch };
+    setInputTime(`${pad(hour % 12 + (period === "PM" ? 12 : 0))}:${pad(minutes)}`);
+    updateDraft();
+  }
 
   function updateDraft() {
     setDirty(true);
@@ -34,12 +53,11 @@ export function TimeConverter({ now, settings, create }: {
     if (!form) return;
     try {
       const fields = new FormData(form);
-      const date = parseDateInput(String(fields.get("iranDate")), calendar);
-      const time = normalizeTime(preset ?? String(fields.get("iranTime")));
-      if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Error("ساعت را به شکل ۲۴ ساعته، مثلاً ۰۹:۳۰، وارد کن.");
+      const date = parseDateInput(String(fields.get("sourceDate")), sourceCalendar);
+      const time = preset ?? inputTime ?? localTime(now, source);
       let result: number;
-      try { result = atTime(date, time, iranZone, "reject"); }
-      catch { throw new Error("این ساعت در تاریخ انتخابی تهران معتبر یا یکتا نیست. ساعت دیگری را انتخاب کن."); }
+      try { result = atTime(date, time, source, "reject"); }
+      catch { throw new Error("این ساعت در تاریخ و منطقهٔ مبدأ معتبر یا یکتا نیست. ساعت دیگری را انتخاب کن."); }
       setSelected(result);
       setInputTime(time);
       setDirty(false);
@@ -52,24 +70,40 @@ export function TimeConverter({ now, settings, create }: {
 
   return <>
     <div className="page-heading"><div><h1>تبدیل ساعت</h1>
-      <p>تاریخ و ساعت ایران را انتخاب کن تا زمان همان لحظه را در شهرها و مناطق دیگر ببینی.</p></div></div>
+      <p>منطقه، تاریخ و ساعت مبدأ را انتخاب کن و همان لحظه را به وقت تهران و شهرهای دیگر ببین.</p></div></div>
     <div className="converter-top">
       <form className="panel padded converter-form" onChange={(event) => {
-        if (event.target instanceof HTMLInputElement && event.target.name === "iranDate") updateDraft();
+        if (event.target instanceof HTMLInputElement && event.target.name === "sourceDate") updateDraft();
       }} onSubmit={(event) => {
         event.preventDefault();
         convert(event.currentTarget);
       }}>
-        <div className="panel-heading"><span className="tile violet"><Clock3 size={20} /></span><div><h2>زمان ایران</h2><p>تهران</p></div></div>
+        <div className="panel-heading"><span className="tile violet"><Clock3 size={20} /></span><h2>زمان مبدأ</h2></div>
         <div className="form-grid">
-          <DateField key={dateReset} name="iranDate" label="تاریخ ایران" date={todayIn(now, iranZone)}
-            calendar={calendar} weekStart={weekStart} onPick={updateDraft} required />
-          <TimePicker name="iranTime" label="ساعت ایران" time={inputTime ?? clockLabel(now, iranZone)}
-            onChange={(value) => { setInputTime(value); updateDraft(); }} />
+          <Field label="منطقهٔ مبدأ"><Select value={source} onValueChange={(zone) => {
+            setSource(zone);
+            updateDraft();
+          }}>
+            <option value={iranZone}>ایران · تهران</option>
+            {destinations.map(({ zone, label }) => <option key={zone} value={zone}>{label}</option>)}
+          </Select></Field>
+          <DateField key={`${source}-${dateReset}`} name="sourceDate" label="تاریخ مبدأ" date={todayIn(now, source)}
+            calendar={sourceCalendar} weekStart={weekStart} onPick={updateDraft} required />
+        </div>
+        <div className="converter-time-parts" role="group" aria-label="ساعت مبدأ">
+          <Field label="ساعت"><Select value={parts.hour} onValueChange={(value) => setPart({ hour: Number(value) })}>
+            {Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
+          </Select></Field>
+          <Field label="دقیقه"><Select value={parts.minutes} onValueChange={(value) => setPart({ minutes: Number(value) })}>
+            {Array.from({ length: 60 }, (_, index) => <option key={index} value={index}>{pad(index)}</option>)}
+          </Select></Field>
+          <Field label="AM / PM"><Select value={parts.period} onValueChange={(value) => setPart({ period: value })}>
+            <option value="AM">AM</option><option value="PM">PM</option>
+          </Select></Field>
         </div>
         <div className="converter-presets" role="group" aria-label="ساعت‌های پرکاربرد">
           {presets.map((time) => <Button key={time} onClick={(event) => convert(event.currentTarget.form, time)}>
-            <bdi>{localizedTime(time)}</bdi>
+            <bdi dir="ltr">{foreignClock(time)}</bdi>
           </Button>)}
         </div>
         {error && <p className="error" role="alert">{error}</p>}
@@ -106,7 +140,7 @@ export function TimeConverter({ now, settings, create }: {
         return <article key={zone} className="panel padded converter-zone" aria-label={label}>
           <div><h2>{label}</h2>{"detail" in metadata && <p>{metadata.detail}</p>}</div>
           <div className="converter-zone-time">
-            <strong><bdi>{localizedTime(local.toPlainTime().toString({ smallestUnit: "minute" }))}</bdi></strong>
+            <strong><bdi dir="ltr">{foreignClock(local.toPlainTime().toString({ smallestUnit: "minute" }))}</bdi></strong>
             <small><bdi>UTC{local.offset}</bdi></small>
           </div>
           <footer><span>{fullDay(date, calendar)}</span><span className="converter-shift" data-shift={date !== iranDate}>{shift}</span></footer>

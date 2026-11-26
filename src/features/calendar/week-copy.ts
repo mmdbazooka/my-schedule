@@ -4,7 +4,7 @@ import type { Occurrence, PlannerEvent } from "@/types/planner";
 
 export function weekCopySources(events: PlannerEvent[], from: string, zone: string) {
   const to = addDays(from, 7);
-  return events.filter((event) => !event.recurrence).flatMap((entry) => {
+  return events.filter((event) => !event.recurrence && !event.googleCalendar).flatMap((entry) => {
     const displayDate = entry.timing.allDay ? entry.timing.start : todayIn(timingInterval(entry.timing, zone).start, zone);
     return displayDate >= from && displayDate < to ? [{ entry, displayDate }] : [];
   }).sort((a, b) => timingInterval(a.entry.timing, zone).start - timingInterval(b.entry.timing, zone).start);

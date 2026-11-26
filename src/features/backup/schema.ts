@@ -55,7 +55,7 @@ const recurrence = z.object({
     z.object({ type: z.literal("count"), count: z.number().int().min(1).max(100_000) }),
   ]),
 });
-const event = eventFieldsSchema.extend({ id, recurrence: recurrence.nullable(), exceptions: z.record(date, eventFieldsSchema.nullable()) });
+const event = eventFieldsSchema.extend({ id, googleCalendar: z.string().regex(/^[a-f0-9]{64}$/).optional(), recurrence: recurrence.nullable(), exceptions: z.record(date, eventFieldsSchema.nullable()) });
 const task = z.object({
   id, title, minutes: z.number().int().min(1).max(1440), priority: z.enum(["low", "medium", "high"]),
   due: date.nullable(), eventId: id.nullable(), lessonId: id.nullable(), categoryId: id.nullable(), done: z.boolean(),
@@ -87,7 +87,7 @@ const dataSchema = z.object({
 const envelope = z.object({ version: z.number().int(), exportedAt: z.iso.datetime({ offset: true }), data: z.unknown() });
 const unique = (values: string[]) => new Set(values).size === values.length;
 
-export const version = 4;
+export const version = 5;
 
 export function validateData(input: unknown): PlannerData {
   const parsed = dataSchema.safeParse(input);
@@ -106,6 +106,9 @@ export function validateData(input: unknown): PlannerData {
   }
   for (const entry of data.events) {
     const dates = Object.keys(entry.exceptions);
+    if (entry.googleCalendar && (entry.recurrence || !/^google_[a-f0-9]{64}$/.test(entry.id))) {
+      throw new Error("شناسه یا ساختار جلسهٔ واردشده از گوگل معتبر نیست.");
+    }
     if (!categoryIds.has(entry.categoryId) || Object.values(entry.exceptions).some((value) => value && !categoryIds.has(value.categoryId))) {
       throw new Error("یکی از رویدادها به دسته‌ای ناموجود ارجاع دارد.");
     }
@@ -127,7 +130,7 @@ export function validateData(input: unknown): PlannerData {
   const linked = data.tasks.flatMap((entry) => entry.eventId ? [entry.eventId] : []);
   if (!unique(linked) || linked.some((key) => {
     const entry = eventsById.get(key);
-    return !entry || entry.recurrence || entry.status === "cancelled";
+    return !entry || entry.googleCalendar || entry.recurrence || entry.status === "cancelled";
   })) throw new Error("زمان‌بندی یکی از کارها به رویداد معتبری ارجاع ندارد.");
   if (data.tasks.some((task) => task.eventId && task.done !== (eventsById.get(task.eventId)?.status === "done"))) {
     throw new Error("وضعیت کار با رویداد زمان‌بندی‌شدهٔ آن سازگار نیست.");

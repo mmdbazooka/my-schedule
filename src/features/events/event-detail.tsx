@@ -28,6 +28,7 @@ export function EventDetail({ event, series, data, stale, copy, act }: {
       <span className="state-tag">{statusLabels[event.status]}</span>
       {event.kind !== "general" && <span className="state-tag">{eventKinds[event.kind]}</span>}
       {lesson && <span className="state-tag">{lesson.name}</span>}
+      {series?.googleCalendar && <span className="state-tag">Google Calendar</span>}
       {series?.recurrence && <span className="state-tag"><Repeat2 size={16} /> تکرارشونده</span>}
     </div>
     <ul className="details">
@@ -44,7 +45,10 @@ export function EventDetail({ event, series, data, stale, copy, act }: {
     </ul>
     {event.description && <p className="description">{event.description}</p>}
     {stale && <p role="alert" className="error">این رویداد یا داده‌ها در تب دیگری تغییر کرده‌اند. جزئیات را دوباره باز کنید.</p>}
-    {choice ? <section className={choice === "delete" ? "warning" : "info"}>
+    {series?.googleCalendar ? <div className="action-row">
+      <p className="muted">تغییر ساعت یا لغو این جلسه در Google Calendar انجام می‌شود.</p>
+      <Button disabled={stale} onClick={copy}><Copy size={16} /> کپی</Button>
+    </div> : choice ? <section className={choice === "delete" ? "warning" : "info"}>
       <strong>{choice === "delete" ? "حذف رویداد را تأیید کنید." : `دامنهٔ ${verbs[choice]} را انتخاب کنید.`}</strong>
       <div className="action-row">
         <Button onClick={() => setChoice(null)}>بازگشت</Button>

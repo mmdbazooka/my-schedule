@@ -6,6 +6,7 @@ import { Capture } from "./capture";
 import { TimeConverter } from "@/features/time-converter/time-converter";
 import { Notes } from "@/features/notes/notes";
 import { Review } from "@/features/review/review";
+import { GoogleCalendarPanel } from "@/features/google-calendar/google-calendar-panel";
 import { DeviceSync } from "@/features/sync/device-sync";
 import { Button, Dialog, IconButton } from "@/components/ui";
 import { CalendarView } from "@/features/calendar/calendar-view";
@@ -187,7 +188,7 @@ export function Planner() {
   const series = detail && data?.events.find((entry) => entry.id === detail.event.eventId);
 
   function act(action: "edit" | "delete" | Status, whole: boolean) {
-    if (!data || !detail || !series || store?.revision !== detail.revision) return;
+    if (!data || !detail || !series || series.googleCalendar || store?.revision !== detail.revision) return;
     const event = detail.event;
     if (action === "edit") {
       create({ date: event.date, series, occurrence: whole ? undefined : event.date,
@@ -284,6 +285,8 @@ export function Planner() {
             </div>
           </div>}
         </>}
+        {usable && <GoogleCalendarPanel key={`google-${syncEpoch}`} data={data} revision={store.revision} visible={route === "settings"}
+          save={(events, message, revision) => commit({ ...data, events }, message, revision)} />}
         {usable && <DeviceSync key={syncEpoch} data={data} revision={store.revision} visible={route === "settings"}
           apply={(next, revision) => commit(next, "داده‌های دستگاه دریافت شدند.", revision)} />}
       </main>

@@ -59,6 +59,7 @@ export interface Recurrence {
 
 export interface PlannerEvent extends EventFields {
   id: string;
+  googleCalendar?: string;
   recurrence: Recurrence | null;
   exceptions: Record<string, EventFields | null>;
 }

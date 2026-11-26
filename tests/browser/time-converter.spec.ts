@@ -1,9 +1,14 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { decodeBackup, encodeBackup } from "../../src/features/backup/schema";
 import { defaults } from "../../src/lib/defaults";
 import { storageKey } from "../../src/lib/storage";
 
-test("converts Tehran time across day and DST boundaries, then saves the exact meeting instant", async ({ page }) => {
+async function choose(page: Page, field: string, value: string) {
+  await page.getByRole("combobox", { name: field, exact: true }).click();
+  await page.getByRole("option", { name: value, exact: true }).click();
+}
+
+test("foreign AM/PM time converts to Tehran and retains the exact meeting instant in the calendar", async ({ page }) => {
   const data = defaults();
   data.settings.calendar = "gregory";
   data.settings.zone = "America/New_York";
@@ -15,32 +20,32 @@ test("converts Tehran time across day and DST boundaries, then saves the exact m
   await page.goto("/");
   await page.getByRole("navigation").getByRole("button", { name: "تبدیل ساعت" }).click();
   const zone = (name: string) => page.getByRole("article", { name, exact: true });
-  await expect(zone("GMT")).toContainText("۰۸:۳۰");
-  await expect(zone("نیویورک")).toContainText("۰۳:۳۰");
+  await expect(zone("GMT")).toContainText("8:30 AM");
+  await expect(zone("نیویورک")).toContainText("3:30 AM");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
-  await page.getByLabel("تاریخ ایران", { exact: true }).fill("2026/07/22");
+  await choose(page, "منطقهٔ مبدأ", "GMT");
+  await page.getByLabel("تاریخ مبدأ", { exact: true }).fill("2026/07/22");
+  await choose(page, "ساعت", "1");
+  await choose(page, "دقیقه", "30");
+  await choose(page, "AM / PM", "PM");
   const book = page.getByRole("button", { name: "ثبت جلسه در تقویم" });
   await expect(book).toBeDisabled();
-  await page.getByRole("group", { name: "ساعت‌های پرکاربرد" }).getByRole("button", { name: "۱۲:۰۰" }).click();
-  await expect(zone("EST")).toContainText("۰۳:۳۰");
-  await expect(zone("نیویورک")).toContainText("۰۴:۳۰");
-  await expect(zone("GMT")).toContainText("۰۸:۳۰");
-  await expect(zone("لندن")).toContainText("۰۹:۳۰");
-  await expect(zone("WAT")).toContainText("۰۹:۳۰");
-  await expect(zone("برزیل · برازیلیا و سائوپائولو")).toContainText("۰۵:۳۰");
-
-  const time = page.getByLabel("ساعت ایران", { exact: true });
   const convert = page.getByRole("button", { name: "تبدیل ساعت", exact: true }).last();
-  await time.fill("۲۵:۰۰");
   await convert.click();
-  await expect(page.getByRole("alert").filter({ hasText: "۲۴ ساعته" })).toBeVisible();
-  await expect(book).toBeDisabled();
-  await time.fill("۰۰:۳۰");
-  await convert.click();
-  await expect(zone("EST")).toContainText("روز قبل");
+  await expect(page.getByRole("region", { name: "زمان تبدیل‌شدهٔ تهران" })).toContainText("۱۷:۰۰");
+  await expect(zone("GMT")).toContainText("1:30 PM");
+  await expect(zone("EST")).toContainText("8:30 AM");
+  await expect(zone("نیویورک")).toContainText("9:30 AM");
+  await expect(zone("لندن")).toContainText("2:30 PM");
+  await expect(zone("WAT")).toContainText("2:30 PM");
+  await expect(zone("برزیل · برازیلیا و سائوپائولو")).toContainText("10:30 AM");
 
-  await time.fill("۲۳:۳۰");
+  await choose(page, "ساعت", "8");
+  await convert.click();
+  await expect(zone("GMT")).toContainText("روز قبل");
+  await expect(page.getByRole("region", { name: "زمان تبدیل‌شدهٔ تهران" })).toContainText("۰۰:۰۰");
+  await choose(page, "دقیقه", "00");
   await convert.click();
   await expect(zone("توکیو")).toContainText("روز بعد");
   await book.click();

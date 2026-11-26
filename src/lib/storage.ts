@@ -1,4 +1,5 @@
 import { decodeBackup, encodeBackup } from "@/features/backup/schema";
+import { googleClientKey } from "@/features/google-calendar/google-calendar";
 import { defaults } from "@/lib/defaults";
 import type { PlannerData } from "@/types/planner";
 
@@ -45,6 +46,6 @@ export function writeData(data: PlannerData) {
 }
 
 export function clearData() {
-  try { removeStoredValue(linkKey); removeStoredValue(storageKey); }
+  try { removeStoredValue(linkKey); localStorage.removeItem(googleClientKey); removeStoredValue(storageKey); }
   catch { throw new Error("حذف داده‌ها از حافظهٔ مرورگر ممکن نبود."); }
 }
