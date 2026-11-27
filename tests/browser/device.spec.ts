@@ -10,6 +10,21 @@ async function capture(p: Page, title: string) {
   await expect(dialog(p)).toHaveCount(0);
 }
 
+async function writeNote(page: Page, title: string, body: string) {
+  await go(page, "یادداشت‌ها");
+  await page.getByRole("button", { name: "یادداشت جدید" }).click();
+  await dialog(page).getByLabel("عنوان (اختیاری)").fill(title);
+  await dialog(page).getByLabel("متن یادداشت").fill(body);
+  await dialog(page).getByRole("button", { name: "ذخیرهٔ یادداشت" }).click();
+  await expect(dialog(page)).toHaveCount(0);
+}
+
+async function editSharedNote(page: Page, body: string) {
+  await page.getByRole("button", { name: /یادداشت مشترک/ }).click();
+  await dialog(page).getByLabel("متن یادداشت").fill(body);
+  await dialog(page).getByRole("button", { name: "ذخیرهٔ یادداشت" }).click();
+}
+
 test("two isolated devices exchange encrypted snapshots and retain competing offline edits", async ({browser, page, context}) => {
   const blobs = new Map<string,string>();
   let sha = "";
@@ -31,10 +46,7 @@ test("two isolated devices exchange encrypted snapshots and retain competing off
   await github(context);
   await page.goto("/");
   await capture(page,"کار آزمایشی مبدأ");
-  await go(page,"یادداشت‌ها");
-  await page.getByRole("button",{name:"یادداشت جدید"}).click();
-  await dialog(page).getByLabel("متن یادداشت").fill("این متن فقط برای همگام‌سازی آزمایشی است.");
-  await dialog(page).getByRole("button",{name:"ذخیرهٔ یادداشت"}).click();
+  await writeNote(page, "یادداشت مشترک", "این متن فقط برای همگام‌سازی آزمایشی است.");
   await page.getByRole("button",{name:"تغییر تم روشن و تاریک"}).click();
   await expect(page.locator(".app-shell")).toHaveAttribute("data-theme",/light|dark/);
   await go(page,"تنظیمات");
@@ -62,16 +74,43 @@ test("two isolated devices exchange encrypted snapshots and retain competing off
     await expect(phone.getByText("کار آزمایشی مبدأ",{exact:true})).toBeVisible();
     const old = sha;
     await context.setOffline(true);
+    await mobile.setOffline(true);
     await capture(page,"کار محلی مستقل");
     await capture(phone,"تغییر گوشی");
+    await writeNote(page, "یادداشت کروم", "متن مستقل اول");
+    await editSharedNote(page, "ویرایش کروم روی متن مشترک");
+    await writeNote(phone, "یادداشت گوشی", "متن مستقل دوم");
+    await editSharedNote(phone, "ویرایش گوشی روی متن مشترک");
+    await go(page, "تنظیمات");
+    await mobile.setOffline(false);
     await expect.poll(() => sha).not.toBe(old);
+    const phoneVersion = sha;
     await context.setOffline(false);
-    await expect(page.getByRole("dialog",{name:"انتخاب نسخهٔ همگام‌سازی"})).toBeVisible();
-    await dialog(page).getByRole("button",{name:"جایگزینی داده‌های این دستگاه"}).click();
-    await go(page,"کارهای بدون زمان");
-    await expect(page.getByText("تغییر گوشی",{exact:true})).toBeVisible();
+    const merge = page.getByRole("dialog", { name: "انتخاب نسخهٔ همگام‌سازی" });
+    const confirm = merge.getByRole("button", { name: "ادغام و همگام‌سازی" });
+    await expect(merge).toBeVisible();
+    await expect(confirm).toBeDisabled();
+    expect(sha).toBe(phoneVersion);
+    await merge.getByRole("combobox", { name: /نسخهٔ یادداشت.*یادداشت مشترک/ }).click();
+    await page.getByRole("option", { name: "نگه‌داشتن هر دو به‌صورت دو یادداشت" }).click();
+    await confirm.click();
+    await expect(merge).toHaveCount(0);
+    expect(sha).not.toBe(phoneVersion);
+    await go(phone, "تنظیمات");
+    await phone.getByRole("button", { name: "بررسی اکنون", exact: true }).click();
+
+    for (const device of [page, phone]) {
+      await go(device, "کارهای بدون زمان");
+      await expect(device.getByText("تغییر گوشی", { exact: true })).toBeVisible();
+      await expect(device.getByText("کار محلی مستقل", { exact: true })).toBeVisible();
+      await go(device, "یادداشت‌ها");
+      await expect(device.getByRole("button", { name: /یادداشت کروم/ })).toBeVisible();
+      await expect(device.getByRole("button", { name: /یادداشت گوشی/ })).toBeVisible();
+      await expect(device.getByRole("button", { name: /ویرایش کروم روی متن مشترک/ })).toBeVisible();
+      await expect(device.getByRole("button", { name: /ویرایش گوشی روی متن مشترک/ })).toBeVisible();
+    }
     await page.reload();
-    await expect(page.getByText("تغییر گوشی",{exact:true})).toBeVisible();
+    await expect(page.getByRole("button", { name: /یادداشت کروم/ })).toBeVisible();
     await go(page,"مرور هفتگی");
     await expect(page.getByRole("heading",{name:"زمان هر دسته"})).toBeVisible();
   } finally { await mobile.close(); }

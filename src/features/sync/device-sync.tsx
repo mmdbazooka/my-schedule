@@ -7,10 +7,11 @@ import { fa } from "@/features/calendar/dates";
 import { downloadBackup } from "@/features/settings/settings";
 import type { PlannerData } from "@/types/planner";
 import { linkKey, readStoredValue, removeStoredValue } from "@/lib/storage";
+import { MergeOptions } from "./merge-options";
 import { digest, newPair, pairCode, parsePair, pull, push, remoteSha, verifyPrivate, type Binding } from "./vault";
 
 type Snapshot = { data: PlannerData; revision: number };
-type Decision = { remote: PlannerData; binding: Binding; revision: number; joining: boolean; old: string | null };
+type Decision = { remote: PlannerData; base: PlannerData | null; binding: Binding; revision: number; joining: boolean; old: string | null };
 
 export function DeviceSync({ data, revision, apply, visible }: Snapshot & {
   apply: (data: PlannerData, revision: number) => boolean; visible: boolean;
@@ -80,10 +81,15 @@ export function DeviceSync({ data, revision, apply, visible }: Snapshot & {
       if (!stillCurrent()) return;
       const next = { ...b, sha, hash: remoteHash };
       if (hash !== remoteHash && hash !== b.hash) {
-        setDeferred(false);
-        setDecision({ remote, binding:next, revision:snap.revision, joining:false, old });
-        setMessage("دو دستگاه تغییر دارند. در تنظیمات نسخهٔ موردنظر را انتخاب کن.");
-        return;
+        const base = await pull(b, b.token, b.sha).catch(() => null);
+        const baseHash = base && await digest(base);
+        if (!stillCurrent()) return;
+        if (hash !== baseHash) {
+          setDeferred(false);
+          setDecision({ remote, base, binding:next, revision:snap.revision, joining:false, old });
+          setMessage("دو دستگاه تغییر دارند. می‌توانی تغییرات هر دو را ادغام کنی.");
+          return;
+        }
       }
       if (hash !== remoteHash && !current.current.apply(remote,snap.revision)) throw new Error("ذخیرهٔ نسخهٔ دریافتی انجام نشد.");
       persist(next,old);
@@ -104,7 +110,7 @@ export function DeviceSync({ data, revision, apply, visible }: Snapshot & {
   }, [binding, revision, decision, sync]);
 
   if (!ready) return null;
-  if (!visible) return decision ? <p className="warning">دو نسخهٔ متفاوت پیدا شد. <a href="#settings">انتخاب نسخه در تنظیمات</a></p> : null;
+  if (!visible) return decision ? <p className="warning">دو نسخهٔ متفاوت پیدا شد. <a href="#settings">ادغام در تنظیمات</a></p> : null;
   return <section id="device-sync" tabIndex={-1} className="panel padded settings-card">
     <div className="panel-heading"><span className="tile blue"><Laptop /></span><div><h2>اتصال دستگاه‌ها</h2><p>همگام‌سازی اختیاری با یک فایل رمزگذاری‌شده در مخزن خصوصی GitHub خودت.</p></div></div>
     {binding ? <>
@@ -134,7 +140,7 @@ export function DeviceSync({ data, revision, apply, visible }: Snapshot & {
             const sha = await remoteSha(pair,token);
             const remote = await pull(pair,token,sha);
             setDeferred(false);
-            setDecision({ remote, binding:{ ...pair, token, sha, hash:await digest(remote) }, revision:snap.revision, joining:true, old });
+            setDecision({ remote, base: null, binding:{ ...pair, token, sha, hash:await digest(remote) }, revision:snap.revision, joining:true, old });
           }
           setMode(null);
         });
@@ -153,23 +159,71 @@ export function DeviceSync({ data, revision, apply, visible }: Snapshot & {
         <Button onClick={() => void run(async () => { await navigator.clipboard.writeText(pairCode(binding)); setMessage("کد کپی شد."); setShowCode(false); })}>کپی کد</Button></div>
     </Dialog>}
     {decision && !deferred && <Dialog title={decision.joining ? "دریافت اطلاعات دستگاه" : "انتخاب نسخهٔ همگام‌سازی"} close={() => decision.joining ? setDecision(null) : setDeferred(true)}>
-      <div className="form"><p>نسخهٔ مخزن شامل {fa(decision.remote.events.length)} رویداد و {fa(decision.remote.tasks.length)} کار است. دستگاه فعلی {fa(data.events.length)} رویداد و {fa(data.tasks.length)} کار دارد.</p>
-        <Button onClick={() => downloadBackup(data)}>دانلود بکاپ محلی</Button>
+      <div className="form">
+        <p>مخزن {fa(decision.remote.events.length)} رویداد، {fa(decision.remote.tasks.length)} کار و {fa(decision.remote.notes.length)} یادداشت دارد.
+          دستگاه فعلی {fa(data.events.length)} رویداد، {fa(data.tasks.length)} کار و {fa(data.notes.length)} یادداشت دارد.</p>
+        <div className="action-row">
+          <Button onClick={() => downloadBackup(data)}>دانلود بکاپ محلی</Button>
+          <Button onClick={() => downloadBackup(decision.remote)}>دانلود بکاپ مخزن</Button>
+        </div>
         {message && <p role="status">{message}</p>}
-        {revision !== decision.revision && <p className="warning">داده‌های محلی تغییر کردند. <Button onClick={() => { setDecision(null); if (decision.joining) setMode("join"); }}>بررسی دوبارهٔ نسخه‌ها</Button></p>}
-        <Button variant="primary" disabled={working || revision !== decision.revision} onClick={() => void run(async () => {
+        {revision !== decision.revision && <p className="warning">داده‌های محلی تغییر کردند. نسخه‌ها را دوباره بررسی کن.</p>}
+        {!decision.joining && <>
+          <MergeOptions key={`${decision.binding.sha}:${decision.revision}`} local={data} remote={decision.remote}
+            base={decision.base} disabled={working || revision !== decision.revision} submit={(merged) => void run(async () => {
+              const b = decision.binding;
+              const stillCurrent = () => active.current && readStoredValue(linkKey) === decision.old &&
+                current.current.revision === decision.revision;
+              if (!stillCurrent()) throw new Error("داده‌ها یا اتصال تغییر کردند. نسخه‌ها را دوباره بررسی کن.");
+              const hash = await digest(merged);
+              await verifyPrivate(b, b.token);
+              if (!stillCurrent()) throw new Error("داده‌ها یا اتصال تغییر کردند. نسخه‌ها را دوباره بررسی کن.");
+              const sha = await push(b, b.token, merged, b.sha);
+              if (!stillCurrent() || !current.current.apply(merged, decision.revision)) {
+                throw new Error("ادغام در مخزن ثبت شد، اما نسخهٔ این دستگاه ذخیره نشد. نسخه‌ها را دوباره بررسی کن.");
+              }
+              persist({ ...b, sha, hash }, decision.old);
+              setDecision(null);
+              setMessage("داده‌های دو دستگاه ادغام و با مخزن همگام شدند.");
+            })} />
+          <Button variant="ghost" disabled={working} onClick={() => setDecision(null)}>بررسی دوبارهٔ نسخه‌ها</Button>
+          <details className="sync-replace">
+            <summary>گزینه‌های جایگزینی کامل</summary>
+            <p className="warning">جایگزینی کامل، تغییرات نسخهٔ دیگر را کنار می‌گذارد.</p>
+            <div className="action-row">
+              <Button disabled={working || revision !== decision.revision} onClick={() => void run(async () => {
+                const b = decision.binding;
+                if (readStoredValue(linkKey) !== decision.old) throw new Error("اتصال تغییر کرده است.");
+                await verifyPrivate(b, b.token);
+                if (await remoteSha(b, b.token) !== b.sha) throw new Error("نسخهٔ مخزن تغییر کرده است. نسخه‌ها را دوباره بررسی کن.");
+                if (!current.current.apply(decision.remote, decision.revision)) throw new Error("ذخیرهٔ نسخهٔ دریافتی انجام نشد.");
+                persist(b, decision.old);
+                setDecision(null);
+                setMessage("نسخهٔ مخزن روی دستگاه ذخیره شد.");
+              })}>جایگزینی داده‌های این دستگاه</Button>
+              <Button disabled={working || revision !== decision.revision} onClick={() => void run(async () => {
+                const b = decision.binding;
+                const hash = await digest(data);
+                await verifyPrivate(b, b.token);
+                if (readStoredValue(linkKey) !== decision.old || current.current.revision !== decision.revision) {
+                  throw new Error("داده‌ها یا اتصال تغییر کردند. نسخه‌ها را دوباره بررسی کن.");
+                }
+                const sha = await push(b, b.token, data, b.sha);
+                persist({ ...b, sha, hash }, decision.old);
+                setDecision(null);
+                setMessage("نسخهٔ محلی در مخزن ثبت شد.");
+              })}>جایگزینی نسخهٔ مخزن با داده‌های محلی</Button>
+            </div>
+          </details>
+        </>}
+        {decision.joining && revision !== decision.revision && <Button disabled={working} onClick={() => {
+          setDecision(null); setMode("join");
+        }}>بررسی دوبارهٔ نسخه‌ها</Button>}
+        {decision.joining ? <Button variant="primary" disabled={working || revision !== decision.revision} onClick={() => void run(async () => {
           if (readStoredValue(linkKey) !== decision.old) throw new Error("اتصال تغییر کرده است.");
-          if (!current.current.apply(decision.remote,decision.revision)) throw new Error("ذخیرهٔ نسخهٔ دریافتی انجام نشد.");
-          persist(decision.binding,decision.old); setDecision(null); setMessage("نسخهٔ مخزن روی دستگاه ذخیره شد.");
-        })}>جایگزینی داده‌های این دستگاه</Button>
-        {!decision.joining && <Button disabled={working || revision !== decision.revision} onClick={() => void run(async () => {
-          const b = decision.binding;
-          if (readStoredValue(linkKey) !== decision.old) throw new Error("اتصال تغییر کرده است.");
-          await verifyPrivate(b,b.token);
-          const sha = await push(b,b.token,data,b.sha);
-          persist({ ...b, sha, hash:await digest(data) },decision.old);
-          setDecision(null); setMessage("نسخهٔ محلی در مخزن ثبت شد.");
-        })}>جایگزینی نسخهٔ مخزن با داده‌های محلی</Button>}
+          if (!current.current.apply(decision.remote, decision.revision)) throw new Error("ذخیرهٔ نسخهٔ دریافتی انجام نشد.");
+          persist(decision.binding, decision.old); setDecision(null); setMessage("نسخهٔ مخزن روی دستگاه ذخیره شد.");
+        })}>جایگزینی داده‌های این دستگاه</Button> : null}
       </div></Dialog>}
     {unlink && <Dialog title="قطع اتصال این دستگاه" close={() => setUnlink(false)}><p>کلید و توکن ذخیره‌شدهٔ این اتصال از مرورگر حذف می‌شوند. داده‌های محلی و نسخهٔ مخزن در دسترس می‌مانند.</p>
       <footer className="dialog-actions"><Button onClick={() => setUnlink(false)}>انصراف</Button><Button variant="danger" disabled={working} onClick={() => {

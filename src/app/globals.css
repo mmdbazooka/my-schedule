@@ -503,3 +503,11 @@ legend svg { display: inline-block; vertical-align: middle; }
   .converter-top { grid-template-columns: minmax(0,1fr); }
   .converter-destinations { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
+
+.sync-merge fieldset { min-width: 0; }
+.sync-merge legend { max-width: 100%; overflow-wrap: anywhere; }
+.sync-merge-versions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.sync-merge-versions > div { min-width: 0; padding: 8px; border-radius: 7px; background: var(--soft); font-size: 12px; }
+.sync-merge-versions pre { margin-top: 4px; max-height: 150px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.sync-replace summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.sync-replace[open] > :not(summary) { margin-top: 8px; }

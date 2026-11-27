@@ -57,6 +57,7 @@ export async function remoteSha(pair: Pair, token: string): Promise<string> {
 const aes = (pair: Pair) => crypto.subtle.importKey("raw", bytes(pair.key), "AES-GCM", false, ["encrypt","decrypt"]);
 
 export async function pull(pair: Pair, token: string, sha: string) {
+  if (!/^[a-f0-9]{40}$/.test(sha)) throw new Error("شناسهٔ نسخهٔ همگام‌سازی معتبر نیست.");
   const blob = await request(pair, token, `/git/blobs/${sha}`);
   if (blob.encoding !== "base64" || typeof blob.content !== "string" || blob.content.length > 24_000_000) throw new Error("محتوای نسخهٔ راه‌دور معتبر نیست.");
   let plain: ArrayBuffer;
