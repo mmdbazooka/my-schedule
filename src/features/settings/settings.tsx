@@ -11,7 +11,7 @@ import { GoalFields, readGoal } from "@/features/goals/goal-fields";
 import { duration, fa, latin, normalizeTime, todayIn, weekdays } from "@/features/calendar/dates";
 import type { Category, PlannerData, Settings as Preferences } from "@/types/planner";
 
-function saveFile(contents: Blob, name: string) {
+export function saveFile(contents: Blob, name: string) {
   const url = URL.createObjectURL(contents);
   const download = document.createElement("a");
   download.href = url;

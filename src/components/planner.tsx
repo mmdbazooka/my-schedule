@@ -6,6 +6,7 @@ import { Capture } from "./capture";
 import { TimeConverter } from "@/features/time-converter/time-converter";
 import { Notes } from "@/features/notes/notes";
 import { Review } from "@/features/review/review";
+import { RemindersPanel } from "@/features/reminders/reminders-panel";
 import { GoogleCalendarPanel } from "@/features/google-calendar/google-calendar-panel";
 import { DeviceSync } from "@/features/sync/device-sync";
 import { Button, Dialog, IconButton } from "@/components/ui";
@@ -285,6 +286,7 @@ export function Planner() {
             </div>
           </div>}
         </>}
+        {usable && <RemindersPanel key={`reminders-${syncEpoch}`} events={data.events} zone={zone} now={now} visible={route === "settings"} />}
         {usable && <GoogleCalendarPanel key={`google-${syncEpoch}`} data={data} revision={store.revision} visible={route === "settings"}
           save={(events, message, revision) => commit({ ...data, events }, message, revision)} />}
         {usable && <DeviceSync key={syncEpoch} data={data} revision={store.revision} visible={route === "settings"}
@@ -298,7 +300,7 @@ export function Planner() {
       {notice?.error && <p className="error" role="alert">{notice.text}</p>}
     </Dialog>}
     {usable && detail && <Dialog title={detail.event.title} close={() => setDetail(null)}>
-      <EventDetail event={detail.event} series={series || undefined} data={data} stale={detail.revision !== store.revision} act={act}
+      <EventDetail event={detail.event} series={series || undefined} data={data} now={now} stale={detail.revision !== store.revision} act={act}
         copy={() => create({ date: detail.event.date, fields: { ...detail.event, title: `${detail.event.title.slice(0, 150)} (کپی)`, status: "planned" } })} />
       {notice?.error && <p className="error" role="alert">{notice.text}</p>}
     </Dialog>}

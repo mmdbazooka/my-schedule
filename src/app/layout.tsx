@@ -4,6 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "برنامه ریز",
+  icons: { apple: "/planner-192.png" },
   description: "تقویم شخصی برای برنامه‌ها، کارها و وقت‌های آزاد",
 };
 

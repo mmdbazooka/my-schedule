@@ -1,16 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, Check, Clock3, Copy, Download, ExternalLink, FileText, Link2, MapPin, Pencil, Repeat2, Route, Trash2, X } from "lucide-react";
+import { Bell, CalendarDays, Check, Clock3, Copy, Download, ExternalLink, FileText, Link2, MapPin, Pencil, Repeat2, Route, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui";
 import { addDays, duration, epoch, eventTime, fullDay, todayIn } from "@/features/calendar/dates";
 import { eventKinds, statusLabels } from "@/lib/defaults";
 import type { Occurrence, PlannerData, PlannerEvent, Status } from "@/types/planner";
-import { downloadAttachment } from "@/features/settings/settings";
+import { calendarAlarm } from "@/features/reminders/calendar-alarm";
+import { readReminderSettings } from "@/features/reminders/device";
+import { canRemind } from "@/features/reminders/schedule";
+import { downloadAttachment, saveFile } from "@/features/settings/settings";
 
 type Action = "edit" | "delete" | Status;
-export function EventDetail({ event, series, data, stale, copy, act }: {
-  event: Occurrence; series: PlannerEvent | undefined; data: PlannerData; stale: boolean;
+export function EventDetail({ event, series, data, now, stale, copy, act }: {
+  event: Occurrence; series: PlannerEvent | undefined; data: PlannerData; now: number; stale: boolean;
   copy: () => void; act: (action: Action, whole: boolean) => void;
 }) {
   const [choice, setChoice] = useState<Action | null>(null);
@@ -44,6 +47,13 @@ export function EventDetail({ event, series, data, stale, copy, act }: {
         <Download size={16} /><bdi>{file.name}</bdi></Button></li>)}
     </ul>
     {event.description && <p className="description">{event.description}</p>}
+    {canRemind(event) && epoch(event.timing.start) > now && <div className="action-row">
+      <Button disabled={stale} onClick={() => {
+        const file = calendarAlarm(event, readReminderSettings().lead, Date.now());
+        saveFile(new Blob([file], { type: "text/calendar;charset=utf-8" }), `planner-reminder-${start}.ics`);
+      }}><Bell size={16} /> دانلود یادآوری تقویم</Button>
+      <small className="muted">برای هشدار وقتی برنامه بسته است، فایل را در تقویم دستگاه وارد کن.</small>
+    </div>}
     {stale && <p role="alert" className="error">این رویداد یا داده‌ها در تب دیگری تغییر کرده‌اند. جزئیات را دوباره باز کنید.</p>}
     {series?.googleCalendar ? <div className="action-row">
       <p className="muted">تغییر ساعت یا لغو این جلسه در Google Calendar انجام می‌شود.</p>
