@@ -1,4 +1,4 @@
-import { addDays, atTime, datesBetween, epoch, inZone, minute, timingInterval } from "./dates";
+import { addDays, atTime, datesBetween, epoch, inZone, minute, pad, timingInterval } from "./dates";
 import type { Interval, Occurrence } from "@/types/planner";
 
 export function occurrencesOn(events: Occurrence[], date: string, zone: string) {
@@ -45,4 +45,28 @@ export function timelineLayout(events: Occurrence[], date: string, zone: string)
   }
   finish();
   return entries;
+}
+
+
+export function timelineClickSlot(events: Occurrence[], date: string, zone: string, hour: number, minuteInHour: number): Interval {
+  const hourStart = atTime(date, `${pad(hour)}:00`, zone);
+  const hourSlot = { start: hourStart, end: hourStart + 60 * minute };
+  const clicked = atTime(date, `${pad(hour)}:${pad(minuteInHour)}`, zone);
+  let previousEnd: number | undefined;
+  let nextStart: number | undefined;
+
+  for (const event of events) {
+    if (event.timing.allDay || !event.busy || event.status === "cancelled") continue;
+    const { start, end } = timingInterval(event.timing, zone);
+    if (start <= clicked && clicked < end) return hourSlot;
+    if (end <= clicked) previousEnd = Math.max(previousEnd ?? end, end);
+    if (start > clicked) nextStart = Math.min(nextStart ?? start, start);
+  }
+
+  const gap = previousEnd !== undefined && nextStart !== undefined
+    ? { start: previousEnd, end: nextStart }
+    : { start: Math.max(hourSlot.start, previousEnd ?? hourSlot.start), end: Math.min(hourSlot.end, nextStart ?? hourSlot.end) };
+  const start = Math.ceil(gap.start / minute) * minute;
+  const end = Math.floor(gap.end / minute) * minute;
+  return start < end ? { start, end } : hourSlot;
 }

@@ -9,9 +9,9 @@ import { expandEvents } from "@/features/events/recurrence";
 import type { EventDraft } from "@/features/events/event-form";
 import { statusLabels } from "@/lib/defaults";
 import type { Interval, Occurrence, PlannerData, PlannerEvent, Status } from "@/types/planner";
-import { addDays, addMonths, atTime, clockLabel, dateParts, duration, eventTime, fa, formatDay, fullDay, latin, localizedTime, minute, monthLabel, monthStart, pad, parseDateInput, todayIn, weekday, weekdays, weekBeginning } from "./dates";
+import { addDays, addMonths, clockLabel, dateParts, duration, eventTime, fa, formatDay, fullDay, latin, localizedTime, minute, monthLabel, monthStart, pad, parseDateInput, todayIn, weekday, weekdays, weekBeginning } from "./dates";
 import { CopyDialog } from "./copy-dialog";
-import { occurrencesOn, timelineLayout, visibleDates, wallRange } from "./layout";
+import { occurrencesOn, timelineClickSlot, timelineLayout, visibleDates, wallRange } from "./layout";
 
 type View = "month" | "week" | "day" | "list";
 const views = [
@@ -31,8 +31,8 @@ export function EventRow({ event, data, open }: { event: Occurrence; data: Plann
   </button>;
 }
 
-function Timeline({ dates, events, data, slots, open, create, today }: {
-  dates: string[]; events: Occurrence[]; data: PlannerData; slots: Interval[]; open: (event: Occurrence) => void;
+function Timeline({ dates, events, allEvents, data, slots, open, create, today }: {
+  dates: string[]; events: Occurrence[]; allEvents: Occurrence[]; data: PlannerData; slots: Interval[]; open: (event: Occurrence) => void;
   create: (draft: EventDraft) => void; today: string;
 }) {
   const { zone, calendar } = data.settings;
@@ -51,25 +51,31 @@ function Timeline({ dates, events, data, slots, open, create, today }: {
             onClick={() => open(event)}>{event.title}{event.status !== "planned" && ` · ${statusLabels[event.status]}`}</button>)}
       </div>)}
       <div className="time-labels" dir="ltr">{Array.from({ length: 24 }, (_, hour) => <span key={hour}>{localizedTime(`${pad(hour)}:00`)}</span>)}</div>
-      {dates.map((date) => <div key={date} className="timeline-column">
-        {Array.from({ length: 24 }, (_, hour) => {
-          const time = `${pad(hour)}:00`;
-          const start = atTime(date, time, zone);
-          return <button key={hour} className="hour-hit" onClick={() => create({ date, slot: { start, end: start + 60 * minute } })}
-            aria-label={`رویداد جدید، ${fullDay(date, calendar)} ساعت ${localizedTime(time)}`} />;
-        })}
-        {slots.filter((slot) => todayIn(slot.start, zone) === date).map((slot) => {
-          const range = wallRange(slot, date, zone);
-          return <span key={slot.start} className="timeline-free" style={{ top: `${range.start / 14.4}%`, height: `${(range.end - range.start) / 14.4}%` }} />;
-        })}
-        {timelineLayout(occurrencesOn(events, date, zone), date, zone).map(({ event, start, end, lane, lanes }) =>
-          <button key={occurrenceKey(event)} className="timeline-event" onClick={() => open(event)}
-            style={{ top: `${start / 14.4}%`, height: `${(end - start) / 14.4}%`, insetInlineStart: `${lane * 100 / lanes}%`, width: `${100 / lanes}%`,
-              "--event": data.categories.find((value) => value.id === event.categoryId)?.color } as CSSProperties}
-            title={`${event.title} · ${eventTime(event.timing, zone)} · ${statusLabels[event.status]}`}>
-            <strong>{event.title}{event.status !== "planned" && ` · ${statusLabels[event.status]}`}</strong><small>{eventTime(event.timing, zone)}</small>
-          </button>)}
-      </div>)}
+      {dates.map((date) => {
+        const dayEvents = occurrencesOn(allEvents, date, zone);
+        return <div key={date} className="timeline-column">
+          {Array.from({ length: 24 }, (_, hour) => {
+            const time = `${pad(hour)}:00`;
+            return <button key={hour} className="hour-hit" onClick={(event) => {
+              const row = event.currentTarget.getBoundingClientRect();
+              const minuteInHour = event.detail > 0
+                ? Math.max(0, Math.min(59, Math.floor((event.clientY - row.top) * 60 / row.height))) : 0;
+              create({ date, slot: timelineClickSlot(dayEvents, date, zone, hour, minuteInHour) });
+            }} aria-label={`رویداد جدید، ${fullDay(date, calendar)} ساعت ${localizedTime(time)}`} />;
+          })}
+          {slots.filter((slot) => todayIn(slot.start, zone) === date).map((slot) => {
+            const range = wallRange(slot, date, zone);
+            return <span key={slot.start} className="timeline-free" style={{ top: `${range.start / 14.4}%`, height: `${(range.end - range.start) / 14.4}%` }} />;
+          })}
+          {timelineLayout(occurrencesOn(events, date, zone), date, zone).map(({ event, start, end, lane, lanes }) =>
+            <button key={occurrenceKey(event)} className="timeline-event" onClick={() => open(event)}
+              style={{ top: `${start / 14.4}%`, height: `${(end - start) / 14.4}%`, insetInlineStart: `${lane * 100 / lanes}%`, width: `${100 / lanes}%`,
+                "--event": data.categories.find((value) => value.id === event.categoryId)?.color } as CSSProperties}
+              title={`${event.title} · ${eventTime(event.timing, zone)} · ${statusLabels[event.status]}`}>
+              <strong>{event.title}{event.status !== "planned" && ` · ${statusLabels[event.status]}`}</strong><small>{eventTime(event.timing, zone)}</small>
+            </button>)}
+        </div>;
+      })}
     </div>
   </div>;
 }
@@ -151,7 +157,7 @@ export function CalendarView({ data, date, select, now, create, open, revision, 
           </div>;
         })}
       </div></div>}
-      {(view === "week" || view === "day") && <Timeline key={view} dates={dates} data={data} events={events} slots={slots} create={create} open={open} today={today} />}
+      {(view === "week" || view === "day") && <Timeline key={view} dates={dates} data={data} events={events} allEvents={all} slots={slots} create={create} open={open} today={today} />}
       {view === "list" && <div className="agenda">
         {events.length ? dates.map((value) => {
           const entries = occurrencesOn(events, value, zone);

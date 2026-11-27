@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
-import { addDays, atTime, dateInput, instantISO, weekday } from "../../src/features/calendar/dates";
+import { addDays, atTime, dateInput, fullDay, instantISO, weekday } from "../../src/features/calendar/dates";
 import { decodeBackup, encodeBackup } from "../../src/features/backup/schema";
 import { defaults } from "../../src/lib/defaults";
 import { storageKey } from "../../src/lib/storage";
@@ -217,4 +217,27 @@ test("legacy localStorage loads without rewriting the original value", async ({ 
   await expect(page.getByRole("heading", { name: "عقب‌افتاده‌ها" })).toBeVisible();
   await expect(page.locator("article").filter({ hasText: "کار با مهلت گذشته" })).toBeVisible();
   expect(await page.evaluate((key) => localStorage.getItem(key), storageKey)).toBe(legacyBackup());
+});
+
+test("clicking a short timeline gap pre-fills its exact time in day and week views", async ({ page }) => {
+  const data = defaults();
+  data.settings.buffer = 10;
+  data.events = [
+    event("before-gap", "رویداد قبل", "18:55", "19:25", "work"),
+    event("after-gap", "رویداد بعد", "19:45", "20:30", "work"),
+  ];
+  await page.addInitScript(({ key, raw }) => localStorage.setItem(key, raw), { key: storageKey, raw: encodeBackup(data) });
+  await initialize(page);
+  await nav(page, "تقویم").click();
+
+  for (const view of ["روز", "هفته"]) {
+    await button(page, view).click();
+    if (view === "هفته") await page.getByLabel("جست‌وجوی عنوان رویداد").fill("عنوانی که پیدا نمی‌شود");
+    const row = page.getByRole("button", { name: `رویداد جدید، ${fullDay(date, "persian")} ساعت ۱۹:۰۰`, exact: true });
+    await row.scrollIntoViewIfNeeded();
+    await row.click({ position: { x: 30, y: 32 } });
+    await expect(exactField(page, "ساعت شروع")).toHaveValue("۱۹:۲۵");
+    await expect(exactField(page, "ساعت پایان")).toHaveValue("۱۹:۴۵");
+    await modal(page).press("Escape");
+  }
 });
